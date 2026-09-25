@@ -54,11 +54,13 @@ class DictionaryTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 22, 28, 22)
         layout.addWidget(_label_title("Custom Vocabulary & Dictionary"))
-        layout.addWidget(QLabel(
+        intro = QLabel(
             f'<span style="color:{theme.TEXT_SECONDARY}">Names, products and jargon you use. Add just the word '
             "and Wisperno will listen for it and spell it your way; if Whisper keeps mishearing it the same "
             "way, add that too.</span>"
-        ))
+        )
+        intro.setWordWrap(True)  # unwrapped, this one line set every tab's minimum width to ~2200px
+        layout.addWidget(intro)
 
         top_bar = QHBoxLayout()
         self.search_box = QLineEdit(placeholderText="Search dictionary...")
@@ -91,8 +93,8 @@ class DictionaryTab(QWidget):
         self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self.table, 1)
 
-        form_card = QWidget()
-        form_card.setStyleSheet(f"background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px;")
+        form_card = QWidget(objectName="addWordCard")
+        form_card.setStyleSheet(f"#addWordCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px; }}")
         form = QHBoxLayout(form_card)
         form.setContentsMargins(12, 12, 12, 12)
         # The word itself is what matters (it's what Whisper is told to listen

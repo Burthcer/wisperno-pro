@@ -75,6 +75,11 @@ class MainWindow(QMainWindow):
         root.addWidget(sidebar, 0)  # stretch 0: never grows/shrinks past its fixed width
 
         self.stack = QStackedWidget()
+        # A QStackedWidget's minimum width is its WIDEST page's, so one wide tab
+        # made every tab wider than the window and the hidden-scrollbar area
+        # below clipped their right side. Ignored = each page gets exactly the
+        # window's content width.
+        self.stack.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         # A QScrollArea around the stack is what actually decouples the window's
         # resizability from any one tab's natural content width - without it, Qt's

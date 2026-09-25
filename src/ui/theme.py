@@ -67,6 +67,11 @@ QMainWindow, QWidget {{
     font-family: {FONT_FAMILY};
     font-size: 10pt;
 }}
+/* Text sits on whatever surface holds it - with BG_APP from the rule above,
+   every label/checkbox inside a lighter card showed up as a dark block. */
+QLabel, QCheckBox, QRadioButton {{
+    background-color: transparent;
+}}
 QListWidget#sidebarNav {{
     background-color: {BG_SIDEBAR};
     border: none;

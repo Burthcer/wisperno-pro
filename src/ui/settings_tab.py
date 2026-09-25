@@ -118,14 +118,20 @@ def _no_wheel(widget):
     responds normally to a click, drag, or the up/down arrows, just not to scrolling
     over it. Applied at construction, not by subclassing every widget type."""
     widget.wheelEvent = lambda event: event.ignore()
+    if isinstance(widget, QComboBox):
+        # Size to a short minimum, not the longest option's full text - the
+        # drop-down list still shows every option in full.
+        widget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        widget.setMinimumContentsLength(12)
     return widget
 
 
 def _shortcut_card(title: str, description: str):
     """An elevated surface card (#181824, 12px padding) holding one shortcut recorder,
     so paired shortcuts sit side-by-side in a two-column grid instead of full-width rows."""
-    frame = QFrame()
-    frame.setStyleSheet(f"background-color: #181824; border: 1px solid #262638; border-radius: 10px;")
+    frame = QFrame(objectName="shortcutCard")
+    # Scoped by id - an unscoped style cascades to (and boxes) every label inside.
+    frame.setStyleSheet("#shortcutCard { background-color: #181824; border: 1px solid #262638; border-radius: 10px; }")
     v = QVBoxLayout(frame)
     v.setContentsMargins(12, 12, 12, 12)
     heading = QLabel(title)
@@ -515,9 +521,11 @@ class _AdvancedSettings(QWidget):
         # --- Engine Preset - a bordered, padded container (mockup:
         # assets/screenshots/new assets/) rather than laid straight into the
         # tab's own outer layout like every other Advanced control. ---
-        preset_card = QFrame()
+        preset_card = QFrame(objectName="presetCard")
+        # Scoped by id: a bare "QFrame { }" also matched every QLabel inside
+        # (QLabel is a QFrame), boxing each label in its own border.
         preset_card.setStyleSheet(
-            f"QFrame {{ background-color: #12121A; border: 1px solid #1E1E2C; "
+            f"#presetCard {{ background-color: #12121A; border: 1px solid #1E1E2C; "
             f"border-radius: 12px; }}"
         )
         preset_layout = QVBoxLayout(preset_card)
@@ -858,8 +866,8 @@ class _AdvancedSettings(QWidget):
 
         cards_row = QHBoxLayout()
         for key, preset in MODEL_PRESETS.items():
-            card = QFrame()
-            card.setStyleSheet(f"background-color: #181824; border: 1px solid #262638; border-radius: 10px;")
+            card = QFrame(objectName="presetCompareCard")
+            card.setStyleSheet("#presetCompareCard { background-color: #181824; border: 1px solid #262638; border-radius: 10px; }")
             cv = QVBoxLayout(card)
             cv.setContentsMargins(12, 12, 12, 12)
             title = QLabel(preset["label"])

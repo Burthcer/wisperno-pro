@@ -40,8 +40,8 @@ class SnippetsTab(QWidget):
         top_bar.addWidget(self.search_box, 1)
         layout.addLayout(top_bar)
 
-        form_card = QWidget()
-        form_card.setStyleSheet(f"background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px;")
+        form_card = QWidget(objectName="snippetFormCard")
+        form_card.setStyleSheet(f"#snippetFormCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px; }}")
         form = QHBoxLayout(form_card)
         form.setContentsMargins(12, 12, 12, 12)
         self.trigger_in = QLineEdit(placeholderText='Trigger (e.g. "insert email")')
@@ -85,8 +85,8 @@ class SnippetsTab(QWidget):
             self.grid.addWidget(self._snippet_card(r), row, col)
 
     def _snippet_card(self, r: dict) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet(f"background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px;")
+        card = QFrame(objectName="snippetCard")
+        card.setStyleSheet(f"#snippetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px; }}")
         v = QVBoxLayout(card)
         v.setContentsMargins(14, 12, 14, 12)
 

@@ -194,9 +194,9 @@ class HistoryTab(QWidget):
         bordered card) separates it from the next column, matching the
         mockup's single-container-with-vertical-rules layout rather than 4
         separate boxed cards."""
-        col = QWidget()
+        col = QWidget(objectName="historyCol")
         if divider:
-            col.setStyleSheet(f"border-left: 1px solid {theme.BORDER_SUBTLE};")
+            col.setStyleSheet(f"#historyCol {{ border-left: 1px solid {theme.BORDER_SUBTLE}; }}")
         v = QVBoxLayout(col)
         v.setContentsMargins(20 if divider else 4, 16, 4, 16)
         val = QLabel(value)
@@ -307,8 +307,8 @@ class HistoryTab(QWidget):
         # rounded card - matches the mockup's continuous-list feel rather
         # than a card grid. Still a QWidget (not a bare layout) so its own
         # background/border are real, paintable properties.
-        card = QWidget()
-        card.setStyleSheet(f"background-color: #0D0D14; border-bottom: 1px solid {theme.BORDER_SUBTLE};")
+        card = QWidget(objectName="historyRow")
+        card.setStyleSheet(f"#historyRow {{ background-color: #0D0D14; border-bottom: 1px solid {theme.BORDER_SUBTLE}; }}")
         v = QVBoxLayout(card)
         v.setContentsMargins(4, 14, 4, 14)
         v.setSpacing(8)
