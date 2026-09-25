@@ -20,7 +20,8 @@ def normalize_words(text: str) -> List[str]:
     """Lowercase, drop punctuation (keeping in-word apostrophes), and spell out
     0-20 so "4 PM" and "four pm" count as the same words. Casing and
     punctuation are the formatter's job, so they don't count against Whisper."""
-    text = text.lower().replace("’", "'")
+    text = text.lower().replace("’", "'").replace("%", " percent")
+    text = re.sub(r"(\d)([a-z])", r"\1 \2", text)  # "4pm" -> "4 pm"
     text = re.sub(r"[-_/]", " ", text)
     text = re.sub(r"[^\w\s']", " ", text)
     text = re.sub(r"(?<!\w)'|'(?!\w)", " ", text)

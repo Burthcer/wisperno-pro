@@ -21,7 +21,12 @@ _MISSING_SPACE_RE = re.compile(r"([.!?:,])(?=[A-Za-z])")
 # "like" is only a filler when it trails off as a verbal pause (Whisper tends
 # to punctuate that with a comma) - stripping every "like" would also eat the
 # verb ("I like pizza"), so it's matched separately and only with a comma.
-_FILLER_RE = re.compile(r"\b(?:uh|um|ah|er|you know)\b,?\s*", re.IGNORECASE)
+# "um"/"uh" are never words. "er"/"ah" and "you know" only count as filler
+# when punctuated as an aside ("Ah, I see", "it was, you know, bad") - bare,
+# they're content: "Do you know the answer?", "the ER diagram".
+_FILLER_RE = re.compile(
+    r"\b(?:u+h+|u+m+)\b,?\s*|\b(?:ah|er|you know)\b(?:\s*,\s*|(?=[.!?]))", re.IGNORECASE
+)
 _FILLER_LIKE_RE = re.compile(r"\blike,\s*", re.IGNORECASE)
 
 # Stutter: a word immediately repeating itself one or more times ("the the",
@@ -95,7 +100,18 @@ def _apply_spoken_commands(text: str) -> str:
     return text
 
 
+# A filler Whisper fenced in commas ("we should, uh, go", "Can you, like,
+# send") - drop the filler AND both commas, or "we should, go" is left behind.
+_COMMA_FENCED_FILLER_RE = re.compile(r",\s*\b(?:uh|um|ah|er|like|you know)\b\s*,\s*", re.IGNORECASE)
+
+
+# A filler that ends a sentence takes its leading comma with it ("bad, you know." -> "bad.").
+_TRAILING_FILLER_RE = re.compile(r",\s*\b(?:you know|ah|er|u+h+|u+m+)\b(?=\s*(?:[.!?]|$))", re.IGNORECASE)
+
+
 def _strip_fillers(text: str) -> str:
+    text = _COMMA_FENCED_FILLER_RE.sub(" ", text)
+    text = _TRAILING_FILLER_RE.sub("", text)
     text = _FILLER_RE.sub("", text)
     text = _FILLER_LIKE_RE.sub("", text)
     text = _STUTTER_RE.sub(r"\1\2", text)
@@ -107,6 +123,39 @@ def _strip_fillers(text: str) -> str:
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"[ \t]*\n\n[ \t]*", "\n\n", text)
     return re.sub(r"^[,\s]+", "", text).strip()
+
+
+# "Scratch that" as a spoken edit command (as in Dragon): only when it
+# stands alone as its own phrase - "I need to scratch that itch" is content.
+_SCRATCH_THAT_RE = re.compile(
+    r"(?:\b(?:actually|no|oh|wait)\b[,\s]*)*\bscratch that\b(?=\s*(?:[.,!?;]|$))[.,!?;]*\s*", re.IGNORECASE
+)
+
+
+def apply_scratch_that(text: str) -> str:
+    """Delete what "scratch that" retracts: the words before it in the same
+    sentence, or - if it starts its own sentence - the previous sentence.
+    "Use the red one. Actually, scratch that. Use the blue one." -> "Use the blue one." """
+    while True:
+        m = _SCRATCH_THAT_RE.search(text)
+        if not m:
+            return text
+        before, after = text[:m.start()], text[m.end():]
+        sentence_start = max(before.rfind(". "), before.rfind("! "), before.rfind("? "), before.rfind("\n"))
+        own_sentence = before[sentence_start + 1:].strip(" ,")
+        if own_sentence:  # "..., scratch that, ..." -> drop this sentence's words so far
+            before = before[:sentence_start + 1]
+        else:             # "... . Scratch that. ..." -> drop the previous sentence
+            prev = before.rstrip()
+            prev_start = max(prev[:-1].rfind(". "), prev[:-1].rfind("! "), prev[:-1].rfind("? "), prev[:-1].rfind("\n"))
+            before = prev[:prev_start + 1]
+        text = (before.rstrip() + " " + after.lstrip()).strip()
+
+
+def strip_fillers(text: str) -> str:
+    """Public: remove hesitations/stutters only (no capitalization or list
+    formatting) - used to pre-clean text before the LLM polish sees it."""
+    return _strip_fillers(text)
 
 
 def _cap_punct(item: str) -> str:
@@ -140,6 +189,7 @@ def format_direct(text: str, detect_lists: bool = True) -> str:
         return ""
 
     text = normalize_punctuation_spacing(text)
+    text = apply_scratch_that(text)
     text = _strip_fillers(text)
     if not text:
         return ""

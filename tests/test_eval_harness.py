@@ -32,6 +32,7 @@ def test_word_error_rate() -> None:
     assert word_error_rate("the cat sat", "the sat") == 1 / 3  # one deletion
     assert word_error_rate("the cat sat", "a dog sat") == 2 / 3  # two substitutions
     assert word_error_rate("", "") == 0.0
+    assert word_error_rate("four PM, up twenty percent", "4pm, up 20%") == 0.0
     assert normalize_words("It's GitHub-based, isn't it?") == ["it's", "github", "based", "isn't", "it"]
     logger.success("PASS: WER counts word errors only, ignoring casing, punctuation and 0-20 digit/word forms.")
 

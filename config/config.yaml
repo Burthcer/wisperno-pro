@@ -10,7 +10,7 @@ db_retention_policy: never
 active_mode: polish
 dictionary_path: config/dictionary.json
 profanity_filter: allow
-auto_llm_polish: false
+auto_llm_polish: true
 model_preset: turbo
 audio:
   sample_rate: 16000

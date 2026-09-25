@@ -142,12 +142,33 @@ def test_dictionary_spellings_reach_and_survive_the_llm() -> None:
                    "lowercase terms never force a lowercase sentence start.")
 
 
+def test_llm_dictation_default_and_cpu_mode() -> None:
+    sys.modules.setdefault("src.hotkey_manager", types.SimpleNamespace(HotkeyManager=object))
+    from PySide6.QtCore import QObject
+    from src.config import AppConfig
+    from src.engine import WispernoEngine
+
+    logger.info("--- Testing LLM polish is on by default, but never in CPU Compatibility Mode ---")
+    engine = WispernoEngine.__new__(WispernoEngine)
+    QObject.__init__(engine)
+    engine.config = AppConfig()
+    assert engine.config.auto_llm_polish is True
+    assert engine._llm_dictation_enabled()
+    engine._cpu_compat_mode = True
+    assert not engine._llm_dictation_enabled()
+    engine._cpu_compat_mode = False
+    engine.config.auto_llm_polish = False
+    assert not engine._llm_dictation_enabled()
+    logger.success("PASS: default on; off when the user turns it off or there's no usable GPU.")
+
+
 def run_all_tests() -> None:
     test_rejected_output_falls_back_to_instant_cleanup()
     test_llm_error_falls_back_to_instant_cleanup()
     test_short_clean_detection()
     test_worker_skips_llm_for_short_clean_polish()
     test_dictionary_spellings_reach_and_survive_the_llm()
+    test_llm_dictation_default_and_cpu_mode()
     logger.success("ALL LLM CLEANUP TESTS PASSED")
 
 

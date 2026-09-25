@@ -75,3 +75,5 @@ desktop.ini
 assets/screenshots/Screenshot *.png
 assets/screenshots/new assets/
 tests/screenshots/
+tests/results/
+models/blobs/

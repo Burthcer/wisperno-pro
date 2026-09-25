@@ -118,10 +118,10 @@ def test_pill_goes_live_only_when_audio_arrives() -> None:
     logger.info("--- Testing 'Opening mic...' -> 'Listening...' on first audio ---")
     engine, states = _engine()
     engine._on_ptt_press()
-    assert states == ["mic_starting:DIRECT"], states
+    assert states == ["mic_starting:POLISH"], states
     engine.audio_worker.recorder.mic_live = True
     engine._on_mic_live()
-    assert states[-1] == "recording:DIRECT", states
+    assert states[-1] == "recording:POLISH", states
     _pump(50)
     logger.success(f"PASS: states {states}")
 
@@ -141,7 +141,7 @@ def test_late_audio_after_release_does_not_reopen_listening() -> None:
     engine._on_ptt_press()
     engine.audio_worker.recorder.is_recording = False  # released and stopped before any audio arrived
     engine._on_mic_live()
-    assert "recording:DIRECT" not in states, states
+    assert "recording:POLISH" not in states, states
     logger.success("PASS: a late 'live' signal after stop is ignored.")
 
 
@@ -163,12 +163,12 @@ def test_mic_that_never_delivers_audio_is_cancelled_visibly() -> None:
         engine.audio_worker.recorder.mic_live = True       # audio arrived in time
         engine._on_mic_live()
         _pump(250)
-    assert states[-1] == "recording:DIRECT" and not engine.audio_worker.stop_recording.called, states
+    assert states[-1] == "recording:POLISH" and not engine.audio_worker.stop_recording.called, states
 
     engine, states = _engine()
     engine.audio_worker.start_recording.return_value = False  # device missing / in use
     engine._on_ptt_press()
-    assert states == ["mic_starting:DIRECT", "mic_error"], states
+    assert states == ["mic_starting:POLISH", "mic_error"], states
     logger.success("PASS: watchdog cancels only a mic that never went live; open failure shown at once.")
 
 
@@ -179,7 +179,7 @@ def test_pill_renders_every_mic_state() -> None:
     SCREENSHOT_DIR.mkdir(exist_ok=True)
     pill = FloatingPill()
     pill.hotkey_label = "CTRL+ALT"
-    for state in ("mic_starting:DIRECT", "recording:DIRECT", "mic_error"):
+    for state in ("mic_starting:POLISH", "recording:POLISH", "mic_error"):
         pill.set_state(state)
         for _ in range(30):  # let the width animation settle
             pill._tick()

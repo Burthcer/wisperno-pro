@@ -280,11 +280,13 @@ class _GeneralSettings(QWidget):
         silence_v.addWidget(self.auto_silence_cb)
         layout.addWidget(silence_card)
 
-        self.auto_llm_polish_cb = QCheckBox("Automatically run LLM polish after dictation (slower, full semantic rewrite)")
+        self.auto_llm_polish_cb = QCheckBox("Smart Cleanup with the Local AI (removes filler, fixes corrections, formats lists)")
         self.auto_llm_polish_cb.setChecked(engine.config.auto_llm_polish)
         self.auto_llm_polish_cb.setToolTip(
-            "Off (default): the dictation triggers above use the instant rule-based formatter, zero LLM delay.\n"
-            "On: dictation is routed through your active Engine Preset instead, like Polish Selected Text."
+            "On (default): dictation is cleaned by your active Engine Preset - filler words, \"wait no\" "
+            "corrections, punctuation, lists. Short phrases that are already clean skip it, so they stay instant.\n"
+            "Off: the instant rule-based formatter only - no AI delay at all.\n"
+            "Always off in CPU Compatibility Mode (no usable GPU), where it would be too slow."
         )
         self.auto_llm_polish_cb.stateChanged.connect(lambda s: engine.set_auto_llm_polish(s != 0))
         layout.addWidget(self.auto_llm_polish_cb)

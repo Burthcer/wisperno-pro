@@ -58,28 +58,70 @@ def _run_llm(transformer, text: str, mode: str):
     return out, (time.perf_counter() - t0) * 1000
 
 
+def dictation_output(transformer, raw: str, mode: str = "polish"):
+    """What the app pastes for `raw` on the LLM dictation path - the same
+    decision InferenceWorker makes (short, clean Polish skips the LLM).
+    Returns (text, milliseconds, used_llm)."""
+    from src.direct_formatter import is_short_and_clean
+
+    t0 = time.perf_counter()
+    if mode == "polish" and is_short_and_clean(raw):
+        return format_direct(raw), (time.perf_counter() - t0) * 1000, False
+    out, ms = _run_llm(transformer, raw, mode)
+    return out, ms, True
+
+
 def run_text_cases(args, config) -> None:
-    cases = json.loads(TEXT_CASES_PATH.read_text(encoding="utf-8"))
+    path = Path(args.text_cases) if isinstance(args.text_cases, str) else TEXT_CASES_PATH
+    cases = json.loads(path.read_text(encoding="utf-8"))
     transformer = _load_transformer(config) if args.llm else None
-    direct_pass = llm_pass = 0
+    if transformer:
+        _run_llm(transformer, "the quick brown fox jumps over the lazy dog", "polish")  # same warm-up the app does at startup
+    rows, direct_pass, llm_pass = [], 0, 0
     for case in cases:
         direct = format_direct(case["raw"])
-        ok = exact_match(case["expected"], direct)
-        direct_pass += ok
-        print(f"[{'PASS' if ok else 'FAIL'}] direct  {case['name']}")
-        if not ok:
-            print(f"    expected: {case['expected']!r}\n    got:      {direct!r}")
-        if transformer:
-            polished, ms = _run_llm(transformer, case["raw"], "polish")
-            ok = exact_match(case["expected"], polished)
-            llm_pass += ok
-            print(f"[{'PASS' if ok else 'FAIL'}] llm     {case['name']} ({ms:.0f}ms, "
-                  f"similarity {text_similarity(case['expected'], polished):.0%})")
+        row = {"name": case["name"], "direct": direct, "direct_similarity": text_similarity(case["expected"], direct)}
+        direct_pass += exact_match(case["expected"], direct)
+        if not transformer:
+            ok = exact_match(case["expected"], direct)
+            print(f"[{'PASS' if ok else 'FAIL'}] direct  {case['name']}")
             if not ok:
-                print(f"    got:      {polished!r}")
-    print(f"\nInstant formatter: {direct_pass}/{len(cases)} exact")
+                print(f"    expected: {case['expected']!r}\n    got:      {direct!r}")
+        else:
+            out, ms, used_llm = dictation_output(transformer, case["raw"])
+            row.update(llm=out, llm_ms=ms, used_llm=used_llm, llm_similarity=text_similarity(case["expected"], out),
+                       answered=bool(case.get("must_keep_question")) and "?" not in out,
+                       fallback=bool(used_llm and transformer.last_fallback_applied))
+            ok = exact_match(case["expected"], out)
+            llm_pass += ok
+            flags = "".join([" ANSWERED-QUESTION" if row["answered"] else "", " (guardrail fallback)" if row["fallback"] else "",
+                             "" if used_llm else " (LLM skipped)"])
+            label = "PASS" if ok else f"{row['llm_similarity']:.0%}"
+            print(f"[{label}] {case['name']} ({ms:.0f}ms){flags}")
+            if not ok and args.verbose:
+                print(f"    expected: {case['expected']!r}\n    got:      {out!r}")
+        rows.append(row)
+
+    summary = {"cases": len(cases), "direct_exact": direct_pass,
+               "direct_similarity": statistics.mean(r["direct_similarity"] for r in rows)}
+    print(f"\nInstant formatter: {direct_pass}/{len(cases)} exact, {summary['direct_similarity']:.1%} similar")
     if transformer:
-        print(f"LLM polish ({config.model_preset}): {llm_pass}/{len(cases)} exact")
+        llm_rows = [r for r in rows if r["used_llm"]]
+        summary.update(
+            llm_exact=llm_pass, llm_similarity=statistics.mean(r["llm_similarity"] for r in rows),
+            answered=sum(r["answered"] for r in rows), fallbacks=sum(r["fallback"] for r in rows),
+            llm_ms_median=statistics.median(r["llm_ms"] for r in llm_rows) if llm_rows else 0.0,
+            llm_skipped=len(rows) - len(llm_rows),
+        )
+        print(f"LLM dictation path ({config.model_preset}): {llm_pass}/{len(cases)} exact, "
+              f"{summary['llm_similarity']:.1%} similar, {summary['answered']} question(s) answered, "
+              f"{summary['fallbacks']} guardrail fallback(s), LLM skipped for {summary['llm_skipped']}, "
+              f"median LLM time {summary['llm_ms_median']:.0f}ms")
+    if args.save:
+        out_dir = BASE_DIR / "tests" / "results"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"{args.save}.json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=2), encoding="utf-8")
+        print(f"Saved as tests/results/{args.save}.json")
 
 
 def _results_dir(folder: Path) -> Path:
@@ -134,7 +176,7 @@ def run_recordings(args, config) -> dict:
             "direct_similarity": text_similarity(expected, direct) if expected else None,
         }
         if transformer:
-            row["llm"], row["llm_ms"] = _run_llm(transformer, heard, mode)
+            row["llm"], row["llm_ms"], row["used_llm"] = dictation_output(transformer, heard, mode)
             row["llm_similarity"] = text_similarity(expected, row["llm"]) if expected else None
         rows.append(row)
 
@@ -223,12 +265,33 @@ def main() -> None:
     parser.add_argument("--llm", action="store_true", help="also run the LLM polish with the active preset")
     parser.add_argument("--save", metavar="NAME", help="save this run's results under NAME")
     parser.add_argument("--compare", metavar="NAME", help="compare with a run saved earlier under NAME")
-    parser.add_argument("--text-cases", action="store_true", help="formatting-only cases (no audio needed)")
+    parser.add_argument("--text-cases", nargs="?", const=True, metavar="FILE",
+                        help="text-only cases, no audio needed (default: tests/fixtures/formatting_cases.json; "
+                             "tests/fixtures/llm_cases.json for LLM cleanup)")
     parser.add_argument("-v", "--verbose", action="store_true", help="print what was said vs heard per clip")
+    parser.add_argument("--device", choices=["cuda", "cpu"], help="override whisper.device")
+    parser.add_argument("--compute-type", help="override whisper.compute_type (e.g. float16, int8_float16, int8)")
+    parser.add_argument("--beam-size", type=int, help="override whisper.beam_size")
+    parser.add_argument("--preset", help="override the LLM preset (turbo / standard)")
+    parser.add_argument("--threads", type=int, help="CPU threads for the LLM (CPU-only runs)")
     args = parser.parse_args()
 
     from src.config import load_config
     config = load_config()
+    if args.device:
+        config.whisper.device = args.device
+        if args.device == "cpu":
+            config.llm.n_gpu_layers = 0
+    if args.compute_type:
+        config.whisper.compute_type = args.compute_type
+    if args.beam_size:
+        config.whisper.beam_size = args.beam_size
+    if args.threads:
+        config.llm.n_threads = args.threads
+    if args.preset:
+        from src.presets import apply_preset
+        apply_preset(config.llm, args.preset)
+        config.model_preset = args.preset
     if args.text_cases:
         run_text_cases(args, config)
     else:

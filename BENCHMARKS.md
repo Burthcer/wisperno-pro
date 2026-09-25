@@ -48,3 +48,40 @@ The Flagship (Qwen2.5-3B Q8_0, ~5.1GB), Eco (Qwen2.5-3B IQ4_XS) and Gemma 2
 2B (Beta) presets were retired: Flagship went over the 4GB target for no
 fidelity gain over Standard, Eco matched Standard with no advantage, and
 Gemma was slower than Turbo. See `src/presets.py`.
+
+## Accuracy and cleanup quality (measured 2026-09-25)
+
+Measured with the real models on CPU (4 cores; relative numbers - absolute
+times on an RTX GPU are roughly 10x lower) using the harness in this repo:
+
+- `scripts/make_synthetic_clips.py` renders `tests/fixtures/speech_cases.json`
+  (24 dictation-style clips: filler, "wait no" corrections, questions, lists
+  said in points, jargon, a long ramble, quiet speech, silence) with Piper
+  voices and light background noise.
+- `scripts/eval_dictation.py` runs clips through the real pipeline, or text
+  cases (`tests/fixtures/llm_cases.json`: 30 transcripts incl. questions,
+  commands and prompt-injection that must be cleaned, never obeyed).
+
+**Whisper settings** (large-v3-turbo, 24 clips): word error rate 1.79% for
+int8 and float32, beam 1 and beam 5 alike - neither precision nor beam size
+changed a single word, while float32 doubled the time. The shipped settings
+(int8_float16, beam 1) stay. The one real miss was "poll request" for "pull
+request" (a dictionary job).
+
+**LLM cleanup** (30 text cases, share of output matching the ideal text):
+
+| | Before (prompt as shipped) | After |
+|---|---|---|
+| Instant formatter only | 94.1% | 94.7% (+ 44/44 formatting cases) |
+| Turbo Flagship | 96.7% | **98.3%** |
+| Standard | 95.3% | **98.6%** |
+| Questions answered instead of kept | 0 | 0 |
+| Dictated commands obeyed ("translate this...", "tell me a joke") | 2 slipped through on Standard | 0 (caught, instant formatter used) |
+
+What moved it: the transcript is fenced off as data rather than sent as a
+chat message; um/uh are removed and spoken lists laid out before the model
+sees the text; "scratch that" is applied in code; and three new guardrails
+(content replaced, dictated sentence dropped, list flattened) fall back to
+the instant formatter. End to end on the audio clips, Turbo scores 97%
+against 96% for the instant formatter alone; short, already-clean
+dictations skip the LLM entirely.

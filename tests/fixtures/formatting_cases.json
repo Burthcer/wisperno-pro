@@ -168,5 +168,55 @@
     "name": "prose: number one priority",
     "raw": "Number one priority is speed",
     "expected": "Number one priority is speed."
+  },
+  {
+    "name": "prose: 'do you know' is not filler",
+    "raw": "Do you know the answer?",
+    "expected": "Do you know the answer?"
+  },
+  {
+    "name": "prose: 'ER' is not filler",
+    "raw": "The ER diagram is ready.",
+    "expected": "The ER diagram is ready."
+  },
+  {
+    "name": "filler: you know as an aside",
+    "raw": "It was, you know, pretty bad.",
+    "expected": "It was pretty bad."
+  },
+  {
+    "name": "filler: trailing you know",
+    "raw": "It was pretty bad, you know.",
+    "expected": "It was pretty bad."
+  },
+  {
+    "name": "filler: comma-fenced uh",
+    "raw": "Um, I think we should, uh, go with option B for the launch.",
+    "expected": "I think we should go with option B for the launch."
+  },
+  {
+    "name": "filler: comma-fenced like",
+    "raw": "Can you, like, send me the file?",
+    "expected": "Can you send me the file?"
+  },
+  {
+    "name": "scratch that: previous sentence",
+    "raw": "Let's use the red design. Actually, scratch that. Let's go with the blue design instead.",
+    "expected": "Let's go with the blue design instead."
+  },
+  {
+    "name": "scratch that: mid-sentence",
+    "raw": "Send it to the design team, scratch that, send it to marketing.",
+    "expected": "Send it to marketing."
+  },
+  {
+    "name": "scratch that: keeps earlier sentences",
+    "raw": "The build passed. Deploy it tonight. Scratch that. Deploy it tomorrow morning.",
+    "expected": "The build passed. Deploy it tomorrow morning."
+  },
+  {
+    "name": "prose: scratch that itch",
+    "raw": "I really need to scratch that itch.",
+    "expected": "I really need to scratch that itch."
   }
 ]

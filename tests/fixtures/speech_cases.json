@@ -1,0 +1,148 @@
+[
+  {
+    "id": "01_fillers",
+    "voice": "lessac",
+    "say": "Um, I think we should, uh, go with option B for the launch.",
+    "expected": "I think we should go with option B for the launch."
+  },
+  {
+    "id": "02_self_correction_time",
+    "voice": "ryan",
+    "say": "Let's meet at three, wait no, four PM on Thursday.",
+    "expected": "Let's meet at 4 PM on Thursday."
+  },
+  {
+    "id": "03_question",
+    "voice": "amy",
+    "say": "Can you explain how Python decorators work?",
+    "expected": "Can you explain how Python decorators work?"
+  },
+  {
+    "id": "04_list_three_things",
+    "voice": "alan",
+    "say": "We need three things. First, buy milk. Second, get eggs. Third, go home.",
+    "expected": "We need three things:\n1. Buy milk.\n2. Get eggs.\n3. Go home."
+  },
+  {
+    "id": "05_list_reasons",
+    "voice": "lessac",
+    "say": "There are a few reasons. First, the pricing is too high. Second, the timeline is too short. And third, the team is too small.",
+    "expected": "There are a few reasons:\n1. The pricing is too high.\n2. The timeline is too short.\n3. The team is too small."
+  },
+  {
+    "id": "06_short_clean",
+    "voice": "ryan",
+    "say": "Sounds good, see you at three.",
+    "expected": "Sounds good, see you at 3."
+  },
+  {
+    "id": "07_apology",
+    "voice": "amy",
+    "say": "I'm sorry, I'm running late to the meeting today.",
+    "expected": "I'm sorry, I'm running late to the meeting today."
+  },
+  {
+    "id": "08_email_followup",
+    "voice": "alan",
+    "say": "Hey Sarah, just wanted to follow up on the proposal I sent last week. Let me know if you have any questions.",
+    "expected": "Hey Sarah, just wanted to follow up on the proposal I sent last week. Let me know if you have any questions."
+  },
+  {
+    "id": "09_fillers_and_correction",
+    "voice": "lessac",
+    "say": "So, um, the server keeps crashing, wait no, timing out whenever we deploy to production.",
+    "expected": "The server keeps timing out whenever we deploy to production."
+  },
+  {
+    "id": "10_long_ramble",
+    "voice": "ryan",
+    "say": "Okay so, um, I looked at the dashboard this morning. And, uh, the numbers are actually better than last week. Like, sign ups are up about twenty percent. But retention is still kind of flat. So I think we should, you know, focus the next sprint on onboarding instead of new features.",
+    "expected": "I looked at the dashboard this morning, and the numbers are actually better than last week. Sign-ups are up about 20%, but retention is still flat. So I think we should focus the next sprint on onboarding instead of new features."
+  },
+  {
+    "id": "11_jargon_github",
+    "voice": "amy",
+    "say": "Push the changes to GitHub and open a pull request against the main branch.",
+    "expected": "Push the changes to GitHub and open a pull request against the main branch."
+  },
+  {
+    "id": "12_jargon_api",
+    "voice": "alan",
+    "say": "The API returns a four oh four when the user ID is missing from the JSON payload.",
+    "expected": "The API returns a 404 when the user ID is missing from the JSON payload."
+  },
+  {
+    "id": "13_question_then_statement",
+    "voice": "lessac",
+    "say": "What's the capital of Japan? I forgot.",
+    "expected": "What's the capital of Japan? I forgot."
+  },
+  {
+    "id": "14_list_numbers",
+    "voice": "ryan",
+    "say": "My plan for today. One, fix the login bug. Two, update the docs. Three, deploy to staging.",
+    "expected": "My plan for today:\n1. Fix the login bug.\n2. Update the docs.\n3. Deploy to staging."
+  },
+  {
+    "id": "15_thanks",
+    "voice": "amy",
+    "say": "Thank you so much for your help yesterday, I really appreciate it.",
+    "expected": "Thank you so much for your help yesterday, I really appreciate it."
+  },
+  {
+    "id": "16_article",
+    "voice": "alan",
+    "say": "I was reading this article about machine learning and it mentioned transformers and attention.",
+    "expected": "I was reading this article about machine learning, and it mentioned transformers and attention."
+  },
+  {
+    "id": "17_list_okay_so",
+    "voice": "lessac",
+    "say": "Okay so first we fix the bug and then second we ship it.",
+    "expected": "1. We fix the bug.\n2. We ship it."
+  },
+  {
+    "id": "18_reminder",
+    "voice": "ryan",
+    "say": "Remind me to call the dentist tomorrow morning at nine.",
+    "expected": "Remind me to call the dentist tomorrow morning at 9."
+  },
+  {
+    "id": "19_like_filler_question",
+    "voice": "amy",
+    "say": "Can you, like, send me the file before the end of the day?",
+    "expected": "Can you send me the file before the end of the day?"
+  },
+  {
+    "id": "20_opinion",
+    "voice": "alan",
+    "say": "Honestly, I don't think this is going to work, but let's try it anyway.",
+    "expected": "Honestly, I don't think this is going to work, but let's try it anyway."
+  },
+  {
+    "id": "21_review_request",
+    "voice": "lessac",
+    "say": "Please review the pull request and leave comments on the error handling in the payment service.",
+    "expected": "Please review the pull request and leave comments on the error handling in the payment service."
+  },
+  {
+    "id": "22_steps",
+    "voice": "ryan",
+    "say": "Step one, open settings. Step two, click dictionary. Step three, add the word.",
+    "expected": "1. Open settings.\n2. Click dictionary.\n3. Add the word."
+  },
+  {
+    "id": "23_quiet_speech",
+    "voice": "amy",
+    "say": "Yes, that works for me.",
+    "expected": "Yes, that works for me.",
+    "gain_db": -30
+  },
+  {
+    "id": "24_silence",
+    "voice": null,
+    "say": "",
+    "expected": "",
+    "silence_sec": 2.5
+  }
+]

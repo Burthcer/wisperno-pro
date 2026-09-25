@@ -300,7 +300,7 @@ class WispernoEngine(QObject):
         t1 = time.perf_counter()
         try:
             if self.transformer is not None and self.transformer.llm is not None:
-                self.transformer.transform("okay this is a quick warm up", mode="polish")
+                self.transformer.transform("the quick brown fox jumps over the lazy dog", mode="polish")
         except Exception as e:
             logger.warning(f"LLM warm-up failed (non-fatal): {e}")
         t2 = time.perf_counter()
@@ -329,6 +329,13 @@ class WispernoEngine(QObject):
     def _is_releasing(self) -> bool:
         return getattr(self, "_releasing", False)
 
+    def _llm_dictation_enabled(self) -> bool:
+        """LLM polish for the main dictation hotkey: on unless turned off in
+        Settings - but never in CPU Compatibility Mode, where an LLM pass
+        takes seconds per dictation (measured ~1.5-2s even on a 4-core CPU
+        with the smallest preset) and the instant formatter is the better deal."""
+        return self.config.auto_llm_polish and not getattr(self, "_cpu_compat_mode", False)
+
     def _on_ptt_press(self) -> None:
         if not self._engines_ready or self._processing or self._live_worker is not None or self._is_releasing():
             return
@@ -339,7 +346,7 @@ class WispernoEngine(QObject):
         # runs the zero-LLM src/direct_formatter.py regardless of active_mode,
         # so showing "[POLISH]" there falsely implied an LLM polish pass that
         # never happens.
-        badge = "DIRECT" if not self.config.auto_llm_polish else self.active_mode.upper()
+        badge = self.active_mode.upper() if self._llm_dictation_enabled() else "DIRECT"
         logger.info(f"[RECORDING STARTED] (Mode: {badge})...")
         self._begin_recording(badge)
 
@@ -413,7 +420,7 @@ class WispernoEngine(QObject):
         worker = InferenceWorker(
             audio_array, self.transcriber, self.transformer, self.injector, self.db,
             snippets, self.active_mode, record_duration_ms,
-            use_direct_formatter=not self.config.auto_llm_polish,
+            use_direct_formatter=not self._llm_dictation_enabled(),
             save_recording=self.config.save_recordings_for_testing,
             trailing_space=self.config.injector.trailing_space,
         )
