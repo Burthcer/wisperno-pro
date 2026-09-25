@@ -34,7 +34,10 @@ _FILLER_LIKE_RE = re.compile(r"\blike,\s*", re.IGNORECASE)
 # etc."). The optional trailing "\.?" is deliberately period-only, not comma -
 # a comma before the repeat ("great, great job") is intentional spoken
 # emphasis, not a stutter, and must survive untouched.
-_STUTTER_RE = re.compile(r"\b(\w+)(\.?)(?:\s+\1\b\.?)+", re.IGNORECASE)
+_STUTTER_RE = re.compile(r"\b(?!no\b)(\w+)(\.?)(?:\s+\1\b\.?)+", re.IGNORECASE)
+# "no no other languages" is an answer followed by a sentence, not a stutter -
+# collapsing it loses the answer. Keep both, separated.
+_NO_NO_RE = re.compile(r"\b(no)\s+(?=no\b)", re.IGNORECASE)
 
 # Spoken developer/terminal shorthand -> the literal symbol.
 _SLASH_COMMAND_RE = re.compile(r"\b(?:slash|forward slash)\s*([a-zA-Z0-9_\-]+)\b", re.IGNORECASE)
@@ -115,6 +118,7 @@ def _strip_fillers(text: str) -> str:
     text = _FILLER_RE.sub("", text)
     text = _FILLER_LIKE_RE.sub("", text)
     text = _STUTTER_RE.sub(r"\1\2", text)
+    text = _NO_NO_RE.sub(r"\1, ", text)
     text = re.sub(r"[ \t]+([,.!?])", r"\1", text)
     # Collapse runs of plain spaces/tabs only - a "\n\n" paragraph break
     # (src/transcriber.py's pause-based split) must survive this pass, so

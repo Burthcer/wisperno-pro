@@ -10,6 +10,41 @@
     "expected": "The client wants changes."
   },
   {
+    "name": "no no is an answer, not a stutter",
+    "raw": "no no other languages will be added",
+    "expected": "No, no other languages will be added."
+  },
+  {
+    "name": "answering numbered questions, as Whisper punctuates it",
+    "raw": "So I'd like to answer your questions. Question 1. Yes, I only use it in English. And regarding your question 2. No, no other languages will be added.",
+    "expected": "So I'd like to answer your questions:\n1. Yes, I only use it in English.\n2. No, no other languages will be added."
+  },
+  {
+    "name": "answering numbered questions, unpunctuated",
+    "raw": "so i'd like to answer your questions question one yes i only use it in english and regarding your question two no no other languages will be added",
+    "expected": "So I'd like to answer your questions:\n1. Yes I only use it in english.\n2. No, no other languages will be added."
+  },
+  {
+    "name": "as for question N",
+    "raw": "as for question one, the deadline is friday. as for question two, the budget is fine",
+    "expected": "1. The deadline is friday.\n2. The budget is fine."
+  },
+  {
+    "name": "for the first question ... for the second one",
+    "raw": "Okay, so for the first question, yes, I only use it in English. And for the second one, no, no other languages will be added.",
+    "expected": "1. Yes, I only use it in English.\n2. No, no other languages will be added."
+  },
+  {
+    "name": "the first time stays prose",
+    "raw": "for the first time the build passed and for the second time today it failed",
+    "expected": "For the first time the build passed and for the second time today it failed."
+  },
+  {
+    "name": "a single question mention stays prose",
+    "raw": "I have a question about item 2 on the invoice",
+    "expected": "I have a question about item 2 on the invoice."
+  },
+  {
     "name": "lowercase i",
     "raw": "i think i'm going to head out, i've already told them i'll be late",
     "expected": "I think I'm going to head out, I've already told them I'll be late."

@@ -11,7 +11,9 @@ list is formatted no matter which preset is loaded.
 Recognized cues, which must count up from 1 in order (a stray "second" in
 "wait a second" can't start or break a list):
   - ordinals: first / firstly / first of all, second(ly), third(ly) ... tenth
-  - labelled numbers: number one, step two, point three, item 4
+  - labelled numbers: number one, step two, point three, item 4, question 1,
+    optionally led in ("regarding your question 2", "as for point one")
+  - led-in ordinals: "for the first question ... for the second one"
   - bare numbers at the start of a clause, followed by punctuation:
     "One, fix the bug. Two, ship it." (not "one apple, two oranges")
   - digits the way Whisper writes them: "1. Open the app 2. Click save"
@@ -40,7 +42,22 @@ _ORDINAL_RE = re.compile(
     r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:ly)?(?:\s+of\s+all)?\b",
     re.IGNORECASE,
 )
-_LABELLED_RE = re.compile(rf"\b(?:number|step|point|item)\s+({_NUM})\b", re.IGNORECASE)
+# The lead-in ("regarding your question 2", "as for point one") is part of the
+# cue, so it doesn't end up dangling at the end of the previous item.
+_LABELLED_RE = re.compile(
+    rf"\b(?:(?:regarding|as for|as to|about|for|on)\s+)?(?:(?:your|my|the|our)\s+)?"
+    rf"(?:number|step|point|item|question|part|option|reason)\s+({_NUM})\b",
+    re.IGNORECASE,
+)
+# "for the first question ... for the second one": the ordinal comes after
+# "the" (normally blocked, "the first time"), so it needs both the lead-in and
+# a following item noun to count.
+_LEADIN_ORDINAL_RE = re.compile(
+    r"\b(?:regarding|as for|as to|about|for|on|to)\s+(?:the|your|my)\s+"
+    r"(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+"
+    r"(?:question|point|one|item|part|thing|issue|option|reason)\b",
+    re.IGNORECASE,
+)
 _CARDINAL_RE = re.compile(r"\b(" + "|".join(_NUMBER_WORDS) + r")\b(?=\s*[,.:)])", re.IGNORECASE)
 _DIGIT_RE = re.compile(r"(?<![\w.,])(\d{1,2})[.)](?=\s|$)")
 _CONTINUATION_RE = re.compile(
@@ -101,6 +118,8 @@ def _find_numbered_cues(text: str) -> List[_Cue]:
             continue
         if _next_word(text, m.end()) in _ORDINAL_BLOCKED_AFTER:
             continue
+        cues.append(_Cue(m.start(), m.end(), _ORDINAL_VALUES[m.group(1).lower()]))
+    for m in _LEADIN_ORDINAL_RE.finditer(text):
         cues.append(_Cue(m.start(), m.end(), _ORDINAL_VALUES[m.group(1).lower()]))
     for m in _LABELLED_RE.finditer(text):
         num = m.group(1).lower()
