@@ -122,12 +122,12 @@
   {
     "name": "bullets: bullet point cue",
     "raw": "bullet point buy milk bullet point get eggs",
-    "expected": "• Buy milk.\n• Get eggs."
+    "expected": "\u2022 Buy milk.\n\u2022 Get eggs."
   },
   {
     "name": "bullets: with intro",
     "raw": "shopping list bullet point milk bullet point eggs",
-    "expected": "Shopping list:\n• Milk.\n• Eggs."
+    "expected": "Shopping list:\n\u2022 Milk.\n\u2022 Eggs."
   },
   {
     "name": "prose: single ordinal",
@@ -257,27 +257,27 @@
   {
     "name": "implicit list: counted, comma items",
     "raw": "I need to do three things today, call the bank, finish the report and book the flights.",
-    "expected": "I need to do three things today:\n• Call the bank.\n• Finish the report.\n• Book the flights."
+    "expected": "I need to do three things today:\n\u2022 Call the bank.\n\u2022 Finish the report.\n\u2022 Book the flights."
   },
   {
     "name": "implicit list: counted, one sentence per item",
     "raw": "There are a couple of issues with the build. The tests are flaky. The cache is stale. And nobody owns the pipeline.",
-    "expected": "There are a couple of issues with the build:\n• The tests are flaky.\n• The cache is stale.\n• Nobody owns the pipeline."
+    "expected": "There are a couple of issues with the build:\n\u2022 The tests are flaky.\n\u2022 The cache is stale.\n\u2022 Nobody owns the pipeline."
   },
   {
     "name": "implicit list: 'the main changes are'",
     "raw": "The main changes are, we moved the login page, we fixed the upload bug, and we added dark mode.",
-    "expected": "The main changes are:\n• We moved the login page.\n• We fixed the upload bug.\n• We added dark mode."
+    "expected": "The main changes are:\n\u2022 We moved the login page.\n\u2022 We fixed the upload bug.\n\u2022 We added dark mode."
   },
   {
     "name": "implicit list: unpunctuated counted list",
     "raw": "we have two options, rewrite the parser or patch the old one",
-    "expected": "We have two options:\n• Rewrite the parser.\n• Patch the old one."
+    "expected": "We have two options:\n\u2022 Rewrite the parser.\n\u2022 Patch the old one."
   },
   {
     "name": "implicit list: text after the list stays a sentence",
     "raw": "I found three bugs, the login loop, the broken upload and the slow search. I'll fix them tomorrow.",
-    "expected": "I found three bugs:\n• The login loop.\n• The broken upload.\n• The slow search.\n\nI'll fix them tomorrow."
+    "expected": "I found three bugs:\n\u2022 The login loop.\n\u2022 The broken upload.\n\u2022 The slow search.\n\nI'll fix them tomorrow."
   },
   {
     "name": "prose: ordinary comma series",
@@ -338,5 +338,105 @@
     "name": "Whisper's own period is kept",
     "raw": "Is that okay with you.",
     "expected": "Is that okay with you."
+  },
+  {
+    "name": "across pauses: your exact sentence, pause before each point",
+    "raw": "I will answer both of your questions.\n\nFirst, I don't speak in English.\n\nSecond, I only want the app to be in English.",
+    "expected": "I will answer both of your questions:\n1. I don't speak in English.\n2. I only want the app to be in English."
+  },
+  {
+    "name": "across pauses: pause only after the intro",
+    "raw": "I will answer both of your questions.\n\nFirst, I don't speak in English. Second, I only want the app to be in English.",
+    "expected": "I will answer both of your questions:\n1. I don't speak in English.\n2. I only want the app to be in English."
+  },
+  {
+    "name": "across pauses: no pauses at all",
+    "raw": "I will answer both of your questions. First, I don't speak in English. Second, I only want the app to be in English.",
+    "expected": "I will answer both of your questions:\n1. I don't speak in English.\n2. I only want the app to be in English."
+  },
+  {
+    "name": "across pauses: unpunctuated, pause before each point",
+    "raw": "i will answer both of your questions\n\nfirst i don't speak in english\n\nsecond i only want the app to be in english",
+    "expected": "I will answer both of your questions:\n1. I don't speak in english.\n2. I only want the app to be in english."
+  },
+  {
+    "name": "across pauses: firstly / secondly",
+    "raw": "Here are my answers.\n\nFirstly, yes, I can join on Monday.\n\nSecondly, the budget is fine.",
+    "expected": "Here are my answers:\n1. Yes, I can join on Monday.\n2. The budget is fine."
+  },
+  {
+    "name": "across pauses: number one / number two",
+    "raw": "To answer your questions.\n\nNumber one, the release is on Friday.\n\nNumber two, we still need a designer.",
+    "expected": "To answer your questions:\n1. The release is on Friday.\n2. We still need a designer."
+  },
+  {
+    "name": "across pauses: question 1 / question 2",
+    "raw": "Thanks for the email.\n\nRegarding question 1, yes, it works offline.\n\nRegarding question 2, no, it only supports English.",
+    "expected": "Thanks for the email:\n1. Yes, it works offline.\n2. No, it only supports English."
+  },
+  {
+    "name": "across pauses: three points",
+    "raw": "There are three problems with the build.\n\nFirst, it is slow.\n\nSecond, the tests are flaky.\n\nThird, nobody owns the pipeline.",
+    "expected": "There are three problems with the build:\n1. It is slow.\n2. The tests are flaky.\n3. Nobody owns the pipeline."
+  },
+  {
+    "name": "across pauses: four points and a closing paragraph",
+    "raw": "My plan for today.\n\nFirst, fix the login bug.\n\nSecond, update the docs.\n\nThird, review the pull request.\n\nFinally, deploy to staging.\n\nLet me know if that works.",
+    "expected": "My plan for today:\n1. Fix the login bug.\n2. Update the docs.\n3. Review the pull request.\n4. Deploy to staging.\n\nLet me know if that works."
+  },
+  {
+    "name": "across pauses: only the last sentence before the list becomes the intro",
+    "raw": "I had a long day. Anyway, here are my thoughts.\n\nFirst, the build is slow.\n\nSecond, the tests are flaky.\n\nThanks for reading.",
+    "expected": "I had a long day.\n\nAnyway, here are my thoughts:\n1. The build is slow.\n2. The tests are flaky.\n\nThanks for reading."
+  },
+  {
+    "name": "across pauses: a pause in the middle of an answer",
+    "raw": "First, the build is slow.\n\nIt takes ten minutes every time.\n\nSecond, the tests are flaky.",
+    "expected": "1. The build is slow. It takes ten minutes every time.\n2. The tests are flaky."
+  },
+  {
+    "name": "across pauses: question intro keeps its question mark",
+    "raw": "What should we do next?\n\nFirst, fix the bug.\n\nSecond, ship it.",
+    "expected": "What should we do next?\n1. Fix the bug.\n2. Ship it."
+  },
+  {
+    "name": "implicit across pauses: answer both of your questions",
+    "raw": "I will answer both of your questions.\n\nI don't speak in English.\n\nI only want the app to be in English.",
+    "expected": "I will answer both of your questions:\n\u2022 I don't speak in English.\n\u2022 I only want the app to be in English."
+  },
+  {
+    "name": "implicit across pauses: counted intro",
+    "raw": "I need to do three things today.\n\nCall the bank.\n\nFinish the report.\n\nBook the flights.",
+    "expected": "I need to do three things today:\n\u2022 Call the bank.\n\u2022 Finish the report.\n\u2022 Book the flights."
+  },
+  {
+    "name": "implicit: here are my answers, same paragraph",
+    "raw": "Here are my answers. Yes, I can make it. No, I haven't read it yet.",
+    "expected": "Here are my answers:\n\u2022 Yes, I can make it.\n\u2022 No, I haven't read it yet."
+  },
+  {
+    "name": "prose across pauses: at first / for the second time",
+    "raw": "At first I thought it was broken.\n\nThen I tried it for the second time and it worked.",
+    "expected": "At first I thought it was broken.\n\nThen I tried it for the second time and it worked."
+  },
+  {
+    "name": "prose across pauses: a lone first and a far-off second",
+    "raw": "First, I want to thank everyone.\n\nThe project went well.\n\nIt shipped on time.\n\nThe second thing is the budget.",
+    "expected": "First, I want to thank everyone.\n\nThe project went well.\n\nIt shipped on time.\n\nThe second thing is the budget."
+  },
+  {
+    "name": "prose across pauses: my first thought / my second thought",
+    "raw": "My first thought was to rewrite it.\n\nMy second thought was to leave it alone.",
+    "expected": "My first thought was to rewrite it.\n\nMy second thought was to leave it alone."
+  },
+  {
+    "name": "prose across pauses: plain paragraphs keep their breaks",
+    "raw": "The meeting went well.\n\nWe agreed on the budget.\n\nNext week we start hiring.",
+    "expected": "The meeting went well.\n\nWe agreed on the budget.\n\nNext week we start hiring."
+  },
+  {
+    "name": "prose: 'both' outside an answer intro",
+    "raw": "I fixed both issues. The build is green. Deploying now.",
+    "expected": "I fixed both issues. The build is green. Deploying now."
   }
 ]

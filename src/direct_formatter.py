@@ -10,7 +10,7 @@ for the capitalization/terminal-punctuation pass at the end.
 
 import re
 
-from src.list_formatter import format_spoken_list
+from src.list_formatter import format_lists_across_paragraphs, format_spoken_list
 
 # A period/!/?/:/, immediately followed by a letter with NO space at all
 # ("Hello.How are you?") - restricted to letters, never digits, so real
@@ -221,15 +221,14 @@ def format_direct(text: str, detect_lists: bool = True) -> str:
     if _BARE_COMMAND_RE.match(text.strip()):
         return text.strip()
 
-    # Paragraph breaks (src/transcriber.py's pause-based split) are
-    # formatted independently, same as the very first sentence of the whole
-    # utterance - each one starts a fresh thought, and each can be a list.
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    formatted = []
-    for para in paragraphs:
-        listed = format_spoken_list(para) if detect_lists else None
-        formatted.append(listed or _cap_punct(_cap_sentences(para)))
-    return "\n\n".join(formatted)
+    # Paragraph breaks (src/transcriber.py's pause-based split) are kept and
+    # each prose paragraph formatted on its own - but a spoken list can run
+    # across them (people pause before each point), so list detection looks
+    # across paragraphs: see list_formatter.format_lists_across_paragraphs.
+    prose = lambda para: _cap_punct(_cap_sentences(para))  # noqa: E731
+    if detect_lists:
+        return format_lists_across_paragraphs(text, prose=prose)
+    return "\n\n".join(prose(p.strip()) for p in text.split("\n\n") if p.strip())
 
 
 def _demo() -> None:

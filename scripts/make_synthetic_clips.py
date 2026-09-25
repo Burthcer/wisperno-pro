@@ -82,7 +82,17 @@ def main() -> None:
         if case.get("voice"):
             if case["voice"] not in voices:
                 voices[case["voice"]] = PiperVoice.load(str(_find_voice(Path(args.voices), case["voice"])))
-            speech = _synthesize(voices[case["voice"]], case["say"])
+            if case.get("segments"):
+                # Spoken with a real pause between segments (e.g. before each
+                # point of an answer) - long enough for src/transcriber.py to
+                # start a new paragraph, which is the shape lists must survive.
+                gap = np.zeros(int(case.get("pause_sec", 1.6) * SAMPLE_RATE), dtype=np.float32)
+                parts = []
+                for n, seg in enumerate(case["segments"]):
+                    parts += ([gap] if n else []) + [_synthesize(voices[case["voice"]], seg)]
+                speech = np.concatenate(parts)
+            else:
+                speech = _synthesize(voices[case["voice"]], case["say"])
             speech *= 10 ** (case.get("gain_db", 0) / 20)
             pad = lambda sec: np.zeros(int(sec * SAMPLE_RATE), dtype=np.float32)  # noqa: E731
             audio = np.concatenate([pad(LEAD_IN_SEC), speech, pad(TAIL_SEC)])
@@ -93,7 +103,8 @@ def main() -> None:
             noise_rms = SILENCE_NOISE_RMS
         audio = audio + noise_rms * _pink_noise(len(audio), rng)
         write_wav(out / f"{case['id']}.wav", audio)
-        (out / f"{case['id']}.txt").write_text(_spoken_reference(case["say"]), encoding="utf-8")
+        said = " ".join(case["segments"]) if case.get("segments") else case["say"]
+        (out / f"{case['id']}.txt").write_text(_spoken_reference(said), encoding="utf-8")
         (out / f"{case['id']}.expected.txt").write_text(case["expected"], encoding="utf-8")
         print(f"{case['id']}: {len(audio) / SAMPLE_RATE:.1f}s")
     print(f"\n{len(cases)} clips written to {out}")

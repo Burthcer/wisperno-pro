@@ -10,7 +10,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from loguru import logger
 
 # Ensure CUDA runtime DLLs are found on Windows
@@ -587,21 +587,52 @@ class Transformer:
         return cleaned
 
     @staticmethod
-    def _split_into_chunks(text: str, max_words: int = CHUNK_WORD_TARGET) -> List[str]:
-        """Split text into chunks of up to `max_words`, breaking only at sentence boundaries."""
-        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-        chunks: List[str] = []
+    def _split_into_chunks(text: str, max_words: int = CHUNK_WORD_TARGET) -> List[Tuple[str, str]]:
+        """Split long text into LLM-sized chunks of up to ~`max_words`, as
+        (chunk, joiner) pairs - the joiner goes before the chunk when the
+        results are glued back together ("\n\n" when the chunk starts a new
+        paragraph, " " when it continues one).
+
+        Paragraph-aware: chunks break between paragraphs where possible (so
+        the paragraph breaks survive), a multi-line block - an already
+        formatted list - is never split across chunks, and only a single
+        prose paragraph longer than max_words is cut, at sentence ends."""
+        chunks: List[Tuple[str, str]] = []
         current: List[str] = []
         current_words = 0
-        for sentence in sentences:
-            words_in_sentence = len(sentence.split())
-            if current and current_words + words_in_sentence > max_words:
-                chunks.append(" ".join(current))
-                current, current_words = [], 0
-            current.append(sentence)
-            current_words += words_in_sentence
-        if current:
-            chunks.append(" ".join(current))
+        joiner = ""
+
+        def flush() -> None:
+            nonlocal current, current_words, joiner
+            if current:
+                chunks.append(("\n\n".join(current), joiner))
+                current, current_words, joiner = [], 0, "\n\n"
+
+        for para in (p.strip() for p in text.split("\n\n")):
+            if not para:
+                continue
+            words = len(para.split())
+            if current and current_words + words > max_words:
+                flush()
+            if words <= max_words or "\n" in para:
+                current.append(para)
+                current_words += words
+                continue
+            # One very long prose paragraph: cut at sentence ends, continuing it.
+            flush()
+            piece: List[str] = []
+            piece_words = 0
+            for sentence in re.split(r"(?<=[.!?])\s+", para):
+                n = len(sentence.split())
+                if piece and piece_words + n > max_words:
+                    chunks.append((" ".join(piece), joiner))
+                    piece, piece_words, joiner = [], 0, " "
+                piece.append(sentence)
+                piece_words += n
+            if piece:
+                chunks.append((" ".join(piece), joiner))
+            joiner = "\n\n"
+        flush()
         return chunks
 
     def _with_vocabulary(self, system_prompt: str) -> str:
@@ -800,10 +831,19 @@ class Transformer:
         if word_count <= LONG_FORM_WORD_THRESHOLD:
             return self._transform_chunk(raw_text, label, system_prompt)
 
+        if label == "polish":
+            # Lay out lists over the WHOLE dictation before chunking, so a list
+            # (including one spoken across pauses) can't be cut in two by a
+            # chunk boundary - each list becomes one block the chunker keeps whole.
+            raw_text = format_lists_in_text(strip_fillers(apply_scratch_that(raw_text))) or raw_text
         chunks = self._split_into_chunks(raw_text)
         logger.info(
             f"Long-form dictation ({word_count} words) - splitting into {len(chunks)} chunk(s) "
             f"of ~{CHUNK_WORD_TARGET} words to stay well within the context window."
         )
-        results = [self._transform_chunk(chunk, label, system_prompt) for chunk in chunks if chunk.strip()]
-        return separator.join(r for r in results if r)
+        out = ""
+        for chunk, joiner in chunks:
+            result = self._transform_chunk(chunk, label, system_prompt) if chunk.strip() else ""
+            if result:
+                out += (joiner if out and separator == " " else (separator if out else "")) + result
+        return out

@@ -144,5 +144,59 @@
     "say": "",
     "expected": "",
     "silence_sec": 2.5
+  },
+  {
+    "id": "25_answers_paused",
+    "voice": "lessac",
+    "pause_sec": 1.6,
+    "segments": [
+      "I will answer both of your questions.",
+      "First, I don't speak in English.",
+      "Second, I only want the app to be in English."
+    ],
+    "expected": "I will answer both of your questions:\n1. I don't speak in English.\n2. I only want the app to be in English."
+  },
+  {
+    "id": "26_answers_pause_after_intro",
+    "voice": "ryan",
+    "pause_sec": 1.6,
+    "segments": [
+      "I will answer both of your questions.",
+      "First, I don't speak in English. Second, I only want the app to be in English."
+    ],
+    "expected": "I will answer both of your questions:\n1. I don't speak in English.\n2. I only want the app to be in English."
+  },
+  {
+    "id": "27_question_numbers_paused",
+    "voice": "amy",
+    "pause_sec": 1.6,
+    "segments": [
+      "Thanks for your email.",
+      "Regarding question one, yes, it works offline.",
+      "Regarding question two, no, it only supports English."
+    ],
+    "expected": "Thanks for your email:\n1. Yes, it works offline.\n2. No, it only supports English."
+  },
+  {
+    "id": "28_three_points_paused",
+    "voice": "alan",
+    "pause_sec": 1.8,
+    "segments": [
+      "There are three problems with the build.",
+      "First, it is slow.",
+      "Second, the tests are flaky.",
+      "Third, nobody owns the pipeline."
+    ],
+    "expected": "There are three problems with the build:\n1. It is slow.\n2. The tests are flaky.\n3. Nobody owns the pipeline."
+  },
+  {
+    "id": "29_prose_paused",
+    "voice": "lessac",
+    "pause_sec": 1.6,
+    "segments": [
+      "At first I thought the app was broken.",
+      "Then I tried it for the second time and it worked."
+    ],
+    "expected": "At first I thought the app was broken.\n\nThen I tried it for the second time and it worked."
   }
 ]
