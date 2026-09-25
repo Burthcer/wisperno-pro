@@ -226,6 +226,7 @@ class WispernoEngine(QObject):
             )
 
             system_monitor.mark_models_loaded()
+            self._warm_up_models()
 
             logger.info("Initializing Win32 GetAsyncKeyState hotkey manager...")
             transform_hotkeys = _build_transform_hotkeys(self.db)
@@ -275,6 +276,29 @@ class WispernoEngine(QObject):
         logger.success(f" Press [{self.config.settings_hotkey.upper()}] to open the dashboard.")
         logger.success(f" Initial Mode: [{self.active_mode.upper()}]")
         logger.success("=" * 70)
+
+    def _warm_up_models(self) -> None:
+        """One throwaway pass through each model while the pill still says
+        "loading": the first real dictation otherwise pays for CUDA/cuDNN
+        kernel setup in Whisper, and for the LLM reading its whole Polish
+        prompt (llama.cpp keeps that prompt cached, so later calls reuse it).
+        Runs before the engines are marked ready, so it can never overlap a
+        real dictation on the same (not thread-safe) model instances."""
+        import numpy as np
+
+        t0 = time.perf_counter()
+        try:
+            self.transcriber.transcribe(np.zeros(16000, dtype=np.float32))
+        except Exception as e:
+            logger.warning(f"Whisper warm-up failed (non-fatal): {e}")
+        t1 = time.perf_counter()
+        try:
+            if self.transformer is not None and self.transformer.llm is not None:
+                self.transformer.transform("okay this is a quick warm up", mode="polish")
+        except Exception as e:
+            logger.warning(f"LLM warm-up failed (non-fatal): {e}")
+        t2 = time.perf_counter()
+        logger.info(f"Models warmed up (Whisper {(t1 - t0) * 1000:.0f}ms, LLM {(t2 - t1) * 1000:.0f}ms).")
 
     # --- Pipeline --------------------------------------------------------------
 

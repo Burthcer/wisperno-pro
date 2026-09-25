@@ -4,6 +4,7 @@ Wraps faster-whisper (CTranslate2) with CUDA acceleration and VAD silence filter
 """
 
 import os
+import re
 import sys
 import time
 from typing import Optional, List, Tuple
@@ -47,6 +48,53 @@ CHUNK_CONTEXT_WORDS = 15
 # just continuing the sentence with a space - the natural-pause range a user
 # actually stops and resumes a new thought in, per real dictation behavior.
 PARAGRAPH_PAUSE_SEC = 1.3
+
+# Phrases Whisper is well known to invent on silence/noise (learned from
+# subtitled video). Only dropped when there was (almost) no speech - VAD
+# found none, or under NO_SPEECH_VAD_SEC of it - since a user can really
+# say "thank you".
+KNOWN_HALLUCINATIONS = frozenset({
+    "thank you", "thank you very much", "thanks", "thanks for watching", "thank you for watching",
+    "thanks for watching and see you next time", "please subscribe", "like and subscribe", "subscribe",
+    "bye", "you", "the", "subtitles by the amara org community", "transcribed by",
+})
+NO_SPEECH_VAD_SEC = 0.3
+# A sentence of the prompt at least this long in the output is leaked prompt
+# text, never dictation ("Please transcribe with clear punctuation, ...").
+PROMPT_LEAK_MIN_WORDS = 4
+
+
+def _norm(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s']", " ", text.lower()).split())
+
+
+def _sentences(text: str) -> List[str]:
+    return [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()]
+
+
+def drop_prompt_leak(text: str, prompt: str) -> str:
+    """Remove output sentences that are verbatim copies of a long-enough prompt
+    sentence, plus the dictionary list the prompt ends with ("Technical terms: ...")."""
+    leaked = {_norm(s) for s in _sentences(prompt) if len(s.split()) >= PROMPT_LEAK_MIN_WORDS}
+
+    def is_leak(sentence: str) -> bool:
+        return _norm(sentence) in leaked or sentence.strip().lower().startswith("technical terms:")
+
+    if not any(is_leak(s) for s in _sentences(text)):
+        return text
+    kept = []
+    for paragraph in text.split("\n\n"):
+        sentences = [s for s in _sentences(paragraph) if not is_leak(s)]
+        if sentences:
+            kept.append(" ".join(sentences))
+    return "\n\n".join(kept)
+
+
+def is_no_speech_hallucination(text: str, prompt: str) -> bool:
+    """For audio with (almost) no speech: is `text` one of Whisper's stock
+    inventions, or a copy of the prompt?"""
+    normalized = _norm(text)
+    return normalized in KNOWN_HALLUCINATIONS or normalized in {_norm(s) for s in _sentences(prompt)}
 
 
 class Transcriber:
@@ -163,11 +211,17 @@ class Transcriber:
             "speech_pad_ms": self.config.vad_speech_pad_ms,
         } if self.config.vad_filter else None
 
-        text, _info = self._run_transcription(audio_array, biased_prompt, vad_filter=self.config.vad_filter, vad_params=vad_params)
+        text, info = self._run_transcription(audio_array, biased_prompt, vad_filter=self.config.vad_filter, vad_params=vad_params)
+        no_speech = self.config.vad_filter and getattr(info, "duration_after_vad", 1.0) < NO_SPEECH_VAD_SEC
         if not text:
             logger.warning("Transcription was empty after VAD filtering - retrying without VAD before giving up.")
             text, _info = self._run_transcription(audio_array, biased_prompt, vad_filter=False, vad_params=None)
+            no_speech = True  # VAD found nothing: the retry is exactly when Whisper invents text
 
+        text = drop_prompt_leak(text, biased_prompt)
+        if no_speech and text and is_no_speech_hallucination(text, biased_prompt):
+            logger.info(f"Dropped likely Whisper hallucination on near-silent audio: {text!r}")
+            return ""
         return self.vocabulary.apply_replacements(text.strip())
 
     def transcribe_live_window(self, audio_array: np.ndarray, context: Optional[str] = None) -> List[dict]:
