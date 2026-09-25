@@ -108,6 +108,28 @@ the instant formatter. End to end on the audio clips, Turbo scores 97%
 against 96% for the instant formatter alone; short, already-clean
 dictations skip the LLM entirely.
 
+## Smart formatting (measured 2026-09-25, RTX 4070 Laptop, Turbo)
+
+Wispr Flow-style formatting added to the deterministic formatter, so both
+the instant path and the LLM path get it:
+
+- Lists spoken without cue words, announced by their intro ("I need to do
+  three things today, call the bank, finish the report and book the
+  flights") become an intro line plus "•" bullets. The count must match the
+  items; an ordinary series ("bought milk, eggs and bread") stays prose.
+- Restarted phrases ("we should we should", "can you, can you") kept once.
+- A sentence Whisper left unpunctuated gets "?" when it's a question.
+- New guardrail: Turbo dropped "I think" / "I believe" / "I guess" on 3 of 8
+  hedged sentences, turning an opinion into a statement of fact; that output
+  now falls back to the instant formatter. 0 of 8 after.
+
+| | Before | After |
+|---|---|---|
+| `llm_cases.json`, LLM path exact | 23/30 | 24/30 |
+| `llm_cases.json`, instant formatter exact | 19/30 | 20/30 |
+| `formatting_cases.json` (68, 17 new), instant exact | - | 68/68 |
+| Questions answered / commands obeyed | 0 / 0 | 0 / 0 |
+
 ## Custom dictionary (measured 2026-09-25)
 
 16 clips full of names and jargon (`tests/fixtures/vocab_cases.json`: Supabase,

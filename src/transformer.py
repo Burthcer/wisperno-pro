@@ -59,7 +59,7 @@ from src.direct_formatter import (
     apply_scratch_that, capitalize_pronoun_i, format_direct, normalize_punctuation_spacing, strip_fillers,
     _cap_sentences,
 )
-from src.list_formatter import format_lists_in_text
+from src.list_formatter import BULLET, format_lists_in_text
 from src.swear_filter import apply_profanity_filter, profanity_was_censored
 
 # Above this word count, split into sentence-aligned chunks before transforming.
@@ -108,6 +108,13 @@ CONVERSATIONAL_TRIGGERS = (
 # whole-word markers, not phrase-prefix ones).
 FIRST_PERSON_MARKERS = (" i ", "i'm ", "i am ", " my ", " me ", " me.", " me?", " me,")
 SECOND_PERSON_MARKERS = ("you're ", "you are ", " you ", " you.", " you?", " you!", " your ", "yourself")
+# First-person opinion leads the smaller models drop ("I believe X" -> "X").
+# Matched on space-padded, punctuation-stripped text. "I mean" isn't here -
+# it's a filler the prompt removes on purpose.
+OPINION_MARKERS = (
+    " i think ", " i believe ", " i guess ", " i suppose ", " i feel ", " i'd say ",
+    " i reckon ", " in my opinion ", " i'm not sure ", " i'm pretty sure ",
+)
 
 # Markers of a legitimate mid-sentence self-correction (see the polish
 # prompt's own rule 6) - a raw input containing one of these can legitimately
@@ -274,6 +281,15 @@ def sanity_check(raw: str, output: str, mode: str = "polish", profanity_filter: 
         if any(m in padded_out for m in SECOND_PERSON_MARKERS):
             return "voice shift (first-person input rewritten to second-person output)"
 
+    # Opinion-dropped check: same reasoning as the voice shift - measured on
+    # Turbo (2026-09-25), "I believe the tests are flaky" -> "The tests are
+    # flaky." and "I guess we can move the meeting" -> "We can move the
+    # meeting." (3 of 8 hedged sentences), despite rule 4. Dropping it turns
+    # the speaker's opinion into a flat statement of fact.
+    for marker in OPINION_MARKERS:
+        if marker in padded_raw and marker not in padded_out:
+            return f"opinion dropped ('{marker.strip()}')"
+
     # Content-replaced check: the model obeyed the dictation instead of
     # cleaning it ("translate this into Spanish ..." -> a Spanish sentence,
     # "... tell me a joke" -> a joke). Measured on tests/fixtures/llm_cases.json:
@@ -365,6 +381,13 @@ def _content_words(text: str) -> set:
 
 def _count_list_lines(text: str) -> int:
     return len(re.findall(r"^\s*(?:\d{1,2}[.)]|[-*\u2022])\s", text, re.MULTILINE))
+
+
+_NUMBERED_LINE_RE = re.compile(r"^(\s*)\d{1,2}[.)]\s+", re.MULTILINE)
+
+
+def _count_bullet_lines(text: str) -> int:
+    return len(re.findall(rf"^\s*{BULLET}\s", text, re.MULTILINE))
 
 
 def fallback_format(text: str) -> str:
@@ -719,6 +742,10 @@ class Transformer:
                     logger.warning(f"[FALLBACK_DEBUG] Reason: list flattened by the model | Output: {result!r}")
                     result = fallback_format(original_text.strip())
                     self.last_fallback_applied = True
+                elif _count_bullet_lines(text) >= 2 and _count_bullet_lines(result) == 0:
+                    # Handed "•" bullets, the model renumbered them (the prompt's
+                    # LISTS rule is about numbered cues) - restore the dots.
+                    result = _NUMBERED_LINE_RE.sub(rf"\g<1>{BULLET} ", result)
             elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.info(f"Transformed [{mode}] ({len(text)} -> {len(result)} chars) in {elapsed_ms:.1f}ms.")
             if not result.strip() or result.strip() == text.strip():

@@ -122,12 +122,12 @@
   {
     "name": "bullets: bullet point cue",
     "raw": "bullet point buy milk bullet point get eggs",
-    "expected": "* Buy milk.\n* Get eggs."
+    "expected": "• Buy milk.\n• Get eggs."
   },
   {
     "name": "bullets: with intro",
     "raw": "shopping list bullet point milk bullet point eggs",
-    "expected": "Shopping list:\n* Milk.\n* Eggs."
+    "expected": "Shopping list:\n• Milk.\n• Eggs."
   },
   {
     "name": "prose: single ordinal",
@@ -253,5 +253,90 @@
     "name": "prose: scratch that itch",
     "raw": "I really need to scratch that itch.",
     "expected": "I really need to scratch that itch."
+  },
+  {
+    "name": "implicit list: counted, comma items",
+    "raw": "I need to do three things today, call the bank, finish the report and book the flights.",
+    "expected": "I need to do three things today:\n• Call the bank.\n• Finish the report.\n• Book the flights."
+  },
+  {
+    "name": "implicit list: counted, one sentence per item",
+    "raw": "There are a couple of issues with the build. The tests are flaky. The cache is stale. And nobody owns the pipeline.",
+    "expected": "There are a couple of issues with the build:\n• The tests are flaky.\n• The cache is stale.\n• Nobody owns the pipeline."
+  },
+  {
+    "name": "implicit list: 'the main changes are'",
+    "raw": "The main changes are, we moved the login page, we fixed the upload bug, and we added dark mode.",
+    "expected": "The main changes are:\n• We moved the login page.\n• We fixed the upload bug.\n• We added dark mode."
+  },
+  {
+    "name": "implicit list: unpunctuated counted list",
+    "raw": "we have two options, rewrite the parser or patch the old one",
+    "expected": "We have two options:\n• Rewrite the parser.\n• Patch the old one."
+  },
+  {
+    "name": "implicit list: text after the list stays a sentence",
+    "raw": "I found three bugs, the login loop, the broken upload and the slow search. I'll fix them tomorrow.",
+    "expected": "I found three bugs:\n• The login loop.\n• The broken upload.\n• The slow search.\n\nI'll fix them tomorrow."
+  },
+  {
+    "name": "prose: ordinary comma series",
+    "raw": "I went to the store and bought milk, eggs and bread.",
+    "expected": "I went to the store and bought milk, eggs and bread."
+  },
+  {
+    "name": "prose: count that doesn't match the items",
+    "raw": "We found two issues, which surprised everyone in the meeting.",
+    "expected": "We found two issues, which surprised everyone in the meeting."
+  },
+  {
+    "name": "prose: 'are' with an aside",
+    "raw": "The reasons are, frankly, unclear to me.",
+    "expected": "The reasons are, frankly, unclear to me."
+  },
+  {
+    "name": "prose: packing list with no intro noun",
+    "raw": "For the trip we need to pack sunscreen, towels, snacks, and the charger.",
+    "expected": "For the trip we need to pack sunscreen, towels, snacks, and the charger."
+  },
+  {
+    "name": "repeated phrase",
+    "raw": "we should we should probably ship it on friday",
+    "expected": "We should probably ship it on friday."
+  },
+  {
+    "name": "repeated phrase and word",
+    "raw": "I think I think the the problem is in the cache",
+    "expected": "I think the problem is in the cache."
+  },
+  {
+    "name": "repeated phrase with a comma",
+    "raw": "Can you, can you check the logs",
+    "expected": "Can you check the logs?"
+  },
+  {
+    "name": "question: aux + subject",
+    "raw": "can you send me the file when you get a chance",
+    "expected": "Can you send me the file when you get a chance?"
+  },
+  {
+    "name": "question: wh-word",
+    "raw": "what time is the meeting tomorrow",
+    "expected": "What time is the meeting tomorrow?"
+  },
+  {
+    "name": "not a question: imperative 'do it'",
+    "raw": "do it before lunch",
+    "expected": "Do it before lunch."
+  },
+  {
+    "name": "not a question: 'when' clause",
+    "raw": "when you get home call me",
+    "expected": "When you get home call me."
+  },
+  {
+    "name": "Whisper's own period is kept",
+    "raw": "Is that okay with you.",
+    "expected": "Is that okay with you."
   }
 ]

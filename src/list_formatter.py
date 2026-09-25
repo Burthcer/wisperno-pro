@@ -18,10 +18,14 @@ Recognized cues, which must count up from 1 in order (a stray "second" in
     "One, fix the bug. Two, ship it." (not "one apple, two oranges")
   - digits the way Whisper writes them: "1. Open the app 2. Click save"
   - after the list has started: next / lastly / finally / last but not least
-Plus bullet cues ("bullet point", "next point", "new bullet", "dash").
+Plus bullet cues ("bullet point", "next point", "new bullet", "dash"), and
+lists spoken without any cue words but announced by their intro ("three
+things: ...", "the main changes are, ...") - see _format_implicit_list().
+Numbered cues give "1." items; everything else gets "•" bullet dots.
 
-Deliberately conservative - explicit cues only. Prose that merely mentions
-ordinals ("the first time", "at first", "on second thought") stays prose.
+Deliberately conservative. Prose that merely mentions ordinals ("the first
+time", "at first", "on second thought") or runs a plain series ("bought milk,
+eggs and bread") stays prose.
 """
 
 import re
@@ -218,8 +222,85 @@ def format_spoken_list(text: str) -> Optional[str]:
             return rendered
     bullets = [_Cue(m.start(), m.end(), None) for m in _BULLET_RE.finditer(text)]
     if len(bullets) >= MIN_ITEMS:
-        return _render(text, bullets, lambda i: "*")
-    return None
+        return _render(text, bullets, lambda i: BULLET)
+    return _format_implicit_list(text)
+
+
+# --- Lists spoken without cue words --------------------------------------
+# "I need to do three things today, call the bank, finish the report and book
+# the flights" -> an intro line plus one bullet per item. Only fires on an
+# intro that announces a list: a count + item noun ("three things", "a couple
+# of issues") whose count the items must match, or "<the X> are/include,"
+# with at least three items. An ordinary series ("bought milk, eggs and
+# bread") has no such intro and stays prose.
+BULLET = "•"
+_ITEM_NOUNS = (
+    "things|items|points|issues|problems|reasons|changes|steps|questions|tasks|ideas|options|"
+    "updates|concerns|goals|priorities|bugs|features|topics|decisions|takeaways|requirements|risks"
+)
+_COUNTED_INTRO_RE = re.compile(
+    rf"\b(?:(two|three|four|five|six|seven|eight|nine|ten|\d)|a (couple|few) of|a (few)|(several)|the (following))"
+    rf"\s+(?:[a-z]+\s+)?(?:{_ITEM_NOUNS})\b",
+    re.IGNORECASE,
+)
+_ARE_INTRO_RE = re.compile(rf"\b(?:{_ITEM_NOUNS})\s+(?:are|were|include|included)\s*[:,]", re.IGNORECASE)
+_LEADING_CONNECTOR_RE = re.compile(r"^(?:and|also|then|plus|or)\s+", re.IGNORECASE)
+_MAX_ITEM_WORDS = 20
+
+
+def _split_items(rest: str, separator: str) -> List[str]:
+    if separator == ".":
+        items = re.split(r"(?<=[.!?])\s+", rest)
+    else:
+        items = re.split(r"\s*[,;]\s*", rest)
+        # "... finish the report and book the flights": the last "and"/"or"
+        # separates the final two items.
+        last = re.split(r"\s+(?:and|or)\s+(?!.*\s(?:and|or)\s)", items[-1], maxsplit=1)
+        items = items[:-1] + last
+    return [_LEADING_CONNECTOR_RE.sub("", i.strip(" .,;")).strip() for i in items if i.strip(" .,;")]
+
+
+def _format_implicit_list(text: str) -> Optional[str]:
+    counted = _COUNTED_INTRO_RE.search(text)
+    are = _ARE_INTRO_RE.search(text)
+    match = min((m for m in (counted, are) if m), key=lambda m: m.start(), default=None)
+    if not match:
+        return None
+    if match is are:
+        sep_at = match.end() - 1  # the "," / ":" right after "are"
+    else:
+        # The intro runs to the end of its clause ("three things today,").
+        sep = re.compile(r"[,:.]").search(text, match.end())
+        if not sep:
+            return None
+        sep_at = sep.start()
+    intro, separator, rest = text[:sep_at], text[sep_at], text[sep_at + 1:].strip()
+    if not rest:
+        return None
+
+    tail = ""
+    if separator != ".":
+        # A comma list ends with its sentence; anything after is ordinary text.
+        end = re.search(r"[.!?](?:\s+|$)", rest)
+        if end and rest[end.end():].strip():
+            rest, tail = rest[:end.start()], rest[end.end():].strip()
+
+    items = _split_items(rest, separator)
+    if match is counted:
+        number = match.group(1)  # None for "a couple of" / "a few" / "several" / "the following"
+        if number:
+            if len(items) != (int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]):
+                return None
+        elif not 2 <= len(items) <= 10:
+            return None
+    elif len(items) < 3:
+        return None
+    if any(not 1 <= len(i.split()) <= _MAX_ITEM_WORDS for i in items):
+        return None
+
+    lines = [_clean_intro(intro) or ""] + [f"{BULLET} {_clean_item(i, before_cue=False)}" for i in items]
+    rendered = "\n".join(line for line in lines if line)
+    return rendered + ("\n\n" + _cap_sentences(_capitalize(tail)) if tail else "")
 
 
 def format_lists_in_text(text: str) -> str:

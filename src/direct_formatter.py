@@ -35,6 +35,9 @@ _FILLER_LIKE_RE = re.compile(r"\blike,\s*", re.IGNORECASE)
 # a comma before the repeat ("great, great job") is intentional spoken
 # emphasis, not a stutter, and must survive untouched.
 _STUTTER_RE = re.compile(r"\b(?!no\b)(\w+)(\.?)(?:\s+\1\b\.?)+", re.IGNORECASE)
+# A restarted phrase of 2-4 words ("we should we should go", "can you, can you
+# check") - kept once. Single repeated words are _STUTTER_RE's job.
+_PHRASE_REPEAT_RE = re.compile(r"\b((?:\w+[ \t]+){1,3}\w+)(?:,?[ \t]+\1\b)+", re.IGNORECASE)
 # "no no other languages" is an answer followed by a sentence, not a stutter -
 # collapsing it loses the answer. Keep both, separated.
 _NO_NO_RE = re.compile(r"\b(no)\s+(?=no\b)", re.IGNORECASE)
@@ -117,6 +120,7 @@ def _strip_fillers(text: str) -> str:
     text = _TRAILING_FILLER_RE.sub("", text)
     text = _FILLER_RE.sub("", text)
     text = _FILLER_LIKE_RE.sub("", text)
+    text = _PHRASE_REPEAT_RE.sub(r"\1", text)
     text = _STUTTER_RE.sub(r"\1\2", text)
     text = _NO_NO_RE.sub(r"\1, ", text)
     text = re.sub(r"[ \t]+([,.!?])", r"\1", text)
@@ -162,13 +166,27 @@ def strip_fillers(text: str) -> str:
     return _strip_fillers(text)
 
 
+# When Whisper left a sentence without end punctuation, a question still gets
+# "?": an auxiliary + subject ("can you ...", "is it ...") or a question word.
+# "do it ..." (imperative) and "when you get home ..." (a clause) aren't.
+_QUESTION_START_RE = re.compile(
+    r"^(?:(?:can|could|would|will|should|shall|may|is|are|was|were|am|have|has|had)\s+"
+    r"(?:you|i|we|they|he|she|it|this|that|there|the|my|your|our|anyone|someone|everyone)\b"
+    r"|(?:do|does|did)\s+(?:you|i|we|they|he|she|the|my|your|our|anyone|someone|everyone)\b"
+    r"|(?:what|why|how|where|who|which)\b"
+    r"|when\s+(?:is|are|was|were|will|do|does|did|can|should)\b)",
+    re.IGNORECASE,
+)
+
+
 def _cap_punct(item: str) -> str:
     item = item.strip(" ,")
     if not item:
         return item
     item = item[0].upper() + item[1:]
     if item[-1] not in ".!?":
-        item += "."
+        last_sentence = re.split(r"(?<=[.!?])\s+", item)[-1]
+        item += "?" if _QUESTION_START_RE.match(last_sentence) else "."
     return item
 
 
@@ -228,7 +246,7 @@ def _demo() -> None:
     assert r3 == "The client wants changes.", r3
 
     r4 = format_direct("bullet point buy milk bullet point get eggs")
-    assert r4.split("\n") == ["* Buy milk.", "* Get eggs."], r4
+    assert r4.split("\n") == ["• Buy milk.", "• Get eggs."], r4
 
     r5 = format_direct("I first went to the store")
     assert "\n" not in r5 and r5 == "I first went to the store.", r5

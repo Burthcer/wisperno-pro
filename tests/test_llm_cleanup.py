@@ -162,7 +162,21 @@ def test_llm_dictation_default_and_cpu_mode() -> None:
     logger.success("PASS: default on; off when the user turns it off or there's no usable GPU.")
 
 
+def test_dropped_opinion_falls_back() -> None:
+    logger.info("--- Testing 'I believe X' -> 'X' is caught and falls back ---")
+    raw = "I believe the tests are flaky"
+    t = _transformer("The tests are flaky.")  # what Turbo really returned
+    out = t.transform(raw, mode="polish")
+    assert t.last_fallback_applied
+    assert out == "I believe the tests are flaky.", out
+    kept = _transformer("I believe the tests are flaky.")
+    assert kept.transform(raw, mode="polish") == "I believe the tests are flaky."
+    assert not kept.last_fallback_applied
+    logger.success("PASS: dropped opinion -> instant formatter; kept opinion -> model output.")
+
+
 def run_all_tests() -> None:
+    test_dropped_opinion_falls_back()
     test_rejected_output_falls_back_to_instant_cleanup()
     test_llm_error_falls_back_to_instant_cleanup()
     test_short_clean_detection()

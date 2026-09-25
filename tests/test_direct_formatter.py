@@ -43,7 +43,7 @@ def test_bullet_list_detection() -> None:
     logger.info("--- Testing spoken bullet-list detection ---")
     result = format_direct("bullet point buy milk bullet point get eggs")
     logger.info(f"-> {result!r}")
-    assert result.split("\n") == ["* Buy milk.", "* Get eggs."], result
+    assert result.split("\n") == ["• Buy milk.", "• Get eggs."], result
     logger.success("PASS: bullet cues formatted as a clean bullet list.")
 
 

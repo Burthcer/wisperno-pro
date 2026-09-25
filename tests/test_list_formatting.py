@@ -75,6 +75,15 @@ def test_llm_path_keeps_a_list_the_model_already_made() -> None:
     logger.success("PASS: model-made list left as is.")
 
 
+def test_llm_path_keeps_bullet_dots_the_model_renumbered() -> None:
+    logger.info("--- Testing a bullet list the model renumbered gets its dots back ---")
+    raw = "I need to do three things today, call the bank, finish the report and book the flights."
+    transformer = _fake_transformer("I need to do three things today:\n1. Call the bank.\n2. Finish the report.\n3. Book the flights.")
+    out = transformer.transform(raw, mode="polish")
+    assert out == "I need to do three things today:\n• Call the bank.\n• Finish the report.\n• Book the flights.", out
+    logger.success("PASS: renumbered bullets restored to dots.")
+
+
 def test_llm_path_leaves_other_modes_alone() -> None:
     logger.info("--- Testing non-polish modes are not list-formatted ---")
     prose = "First, the build is slow. Second, the tests are flaky."
@@ -128,6 +137,7 @@ def run_all_tests() -> None:
     test_fixture_cases_through_instant_formatter()
     test_llm_path_backstop_formats_prose_lists()
     test_llm_path_keeps_a_list_the_model_already_made()
+    test_llm_path_keeps_bullet_dots_the_model_renumbered()
     test_llm_path_leaves_other_modes_alone()
     test_live_transcripts_are_not_turned_into_lists()
     test_polish_prompts_carry_the_list_rule()
