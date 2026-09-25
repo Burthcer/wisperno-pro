@@ -261,7 +261,7 @@ class FloatingPill(QWidget):
         if self.state == STATE_RECORDING:
             return "#1E1216", theme.ACCENT_RECORDING
         if self.state == STATE_MIC_STARTING:
-            return theme.PILL_BG, theme.TEXT_SECONDARY
+            return theme.PILL_BG, theme.PILL_TEXT
         if self.state == STATE_MIC_ERROR:
             return "#1F160C", theme.ACCENT_ERROR
         if self.state == STATE_PROCESSING:
@@ -311,7 +311,7 @@ class FloatingPill(QWidget):
             return
 
         if self.state == STATE_MIC_STARTING:
-            self._paint_dot(painter, m, cy, theme.TEXT_SECONDARY)  # grey: not capturing yet
+            self._paint_dot(painter, m, cy, theme.PILL_TEXT)  # grey: not capturing yet
             painter.setPen(QColor(theme.PILL_TEXT))
             painter.drawText(QRectF(m + 16, 0, 150, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "Opening mic...")
             self._paint_mode_badge(painter, w, cy, m)
@@ -335,7 +335,7 @@ class FloatingPill(QWidget):
             # gets squeezed into it, whatever the active mode's name length.
             badge_w = self._paint_mode_badge(painter, w, cy, m)
             painter.setFont(font)
-            painter.setPen(QColor(theme.TEXT_SECONDARY))
+            painter.setPen(QColor(theme.PILL_TEXT))
             elapsed = int(time.time() - self._recording_start)
             timer_text = f"{elapsed // 60}:{elapsed % 60:02d}"
             timer_right = w - m - badge_w - 10
@@ -514,7 +514,7 @@ class FloatingPill(QWidget):
         mode_label = self._status_label if self._status_label else self.current_mode
         text = f"[{mode_label}]"
         text_w = QFontMetrics(badge_font).horizontalAdvance(text)
-        painter.setPen(QColor(theme.TEXT_SECONDARY))
+        painter.setPen(QColor(theme.PILL_TEXT))
         painter.setFont(badge_font)
         painter.drawText(QRectF(w - m - text_w, 0, text_w, self.height()),
                           Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, text)

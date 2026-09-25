@@ -49,18 +49,18 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        sidebar = QWidget()
+        sidebar = QWidget(objectName="sidebar")
         sidebar.setFixedWidth(220)
         sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 12, 0, 12)
         sidebar_layout.setSpacing(0)
-        sidebar_layout.addWidget(QLabel(f"✦ {APP_NAME}", objectName="brand"))
+        sidebar_layout.addWidget(QLabel(APP_NAME, objectName="brand"))
 
         # A standalone action button, not a QListWidgetItem: nav items switch
         # the QStackedWidget's page, but Live Transcribe launches a separate
         # floating overlay window (src/ui/live_window.py) instead of a tab.
-        live_btn = QPushButton("🔴  Live Transcribe")
+        live_btn = QPushButton("●   Live Transcribe")
         live_btn.setObjectName("liveTranscribeBtn")
         live_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         live_btn.clicked.connect(daemon_controller.toggle_live_transcription)

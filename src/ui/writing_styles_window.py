@@ -28,10 +28,9 @@ GENERATING_PLACEHOLDER = "Generating..."
 
 QSS = f"""
 QWidget#stylesRoot {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A1A28, stop:0.06 #13131D, stop:1 #111116);
+    background-color: {theme.BG_APP};
     border: 1px solid {theme.BORDER_SUBTLE};
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 12px;
+        border-radius: 12px;
 }}
 QLabel#stylesTitle {{ color: {theme.TEXT_PRIMARY}; font-weight: 700; font-size: 12pt; }}
 QLabel#stylesHint {{ color: {theme.TEXT_SECONDARY}; font-size: 9pt; }}
@@ -46,7 +45,7 @@ QPushButton#originalToggle {{
     font-size: 9pt; text-align: left; padding: 2px;
 }}
 QFrame#styleCard {{
-    background-color: #161622;
+    background-color: {theme.BG_CARD};
     border: 1px solid {theme.BORDER_SUBTLE};
     border-radius: 10px;
 }}
@@ -55,18 +54,27 @@ QFrame#styleCard[focused="true"] {{
 }}
 QLabel#styleTitle {{ color: {theme.TEXT_PRIMARY}; font-weight: 700; font-size: 10pt; }}
 QLabel#styleKeyHint {{
-    color: {theme.ACCENT_PRIMARY}; background-color: rgba(168, 85, 247, 0.14);
+    color: {theme.ACCENT_PRIMARY}; background-color: {theme.ACCENT_PRIMARY_WASH};
     border-radius: 4px; padding: 1px 6px; font-family: {theme.FONT_FAMILY_MONO}; font-size: 8pt; font-weight: 700;
 }}
 QLabel#stylePreview {{ color: {theme.TEXT_PRIMARY}; font-size: 9pt; }}
 QLabel#stylePreview[generating="true"] {{ color: {theme.TEXT_SECONDARY}; font-style: italic; }}
 QPushButton#insertBtn {{
-    background-color: {theme.ACCENT_PRIMARY}; border: none; border-radius: 6px;
+    background-color: {theme.INK}; border: none; border-radius: 6px;
     color: white; font-weight: 600; padding: 4px 12px; font-size: 9pt;
 }}
-QPushButton#insertBtn:hover {{ background-color: {theme.ACCENT_PRIMARY_HOVER}; }}
+QPushButton#insertBtn:hover {{ background-color: {theme.INK_HOVER}; }}
 QPushButton#insertBtn:disabled {{ background-color: {theme.BG_CARD_HOVER}; color: {theme.TEXT_SECONDARY}; }}
 QScrollArea {{ background: transparent; border: none; }}
+/* This window is translucent, so an unpainted scroll viewport/list showed as
+   black between the cards; labels stay transparent on top of the cards. */
+QScrollArea QWidget {{ background-color: {theme.BG_APP}; }}
+QScrollArea QLabel {{ background-color: transparent; }}
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px 2px 2px 0px; }}
+QScrollBar::handle:vertical {{ background: #DAD4CA; min-height: 28px; border-radius: 3px; }}
+QScrollBar::handle:vertical:hover {{ background: {theme.BORDER_STRONG}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
 """
 
 

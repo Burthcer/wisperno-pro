@@ -80,8 +80,8 @@ def _badge(text: str) -> QLabel:
 SOURCE_BADGE_COLORS = {
     "dictation": theme.ACCENT_PRIMARY,     # purple
     "text_polish": theme.ACCENT_SECONDARY,  # muted purple
-    "transform": "#10B981",                 # emerald
-    "live_transcript": "#10B981",           # emerald - matches the mission's "distinct emerald badge" spec
+    "transform": "#047857",                 # emerald (readable on light)
+    "live_transcript": "#047857",           # emerald - matches the mission's "distinct emerald badge" spec
     "writing_style": theme.ACCENT_PRIMARY_ACTIVE,  # brighter purple - a Writing Styles (Alt+V) result
 }
 
@@ -195,12 +195,14 @@ class HistoryTab(QWidget):
         mockup's single-container-with-vertical-rules layout rather than 4
         separate boxed cards."""
         col = QWidget(objectName="historyCol")
-        if divider:
-            col.setStyleSheet(f"#historyCol {{ border-left: 1px solid {theme.BORDER_SUBTLE}; }}")
+        col.setStyleSheet(
+            f"#historyCol {{ background: transparent; "
+            + (f"border-left: 1px solid {theme.BORDER_SUBTLE}; " if divider else "") + "}"
+        )
         v = QVBoxLayout(col)
         v.setContentsMargins(20 if divider else 4, 16, 4, 16)
         val = QLabel(value)
-        val.setStyleSheet(f"font-family: {theme.FONT_FAMILY_MONO}; font-size: 20pt; font-weight: 700; color: {theme.TEXT_PRIMARY};")
+        val.setStyleSheet(f"font-family: {theme.FONT_FAMILY_NUMERIC}; font-size: 20pt; font-weight: 600; color: {theme.TEXT_PRIMARY};")
         lab = QLabel(label)
         lab.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 8pt;")
         v.addWidget(val)
@@ -308,7 +310,7 @@ class HistoryTab(QWidget):
         # than a card grid. Still a QWidget (not a bare layout) so its own
         # background/border are real, paintable properties.
         card = QWidget(objectName="historyRow")
-        card.setStyleSheet(f"#historyRow {{ background-color: #0D0D14; border-bottom: 1px solid {theme.BORDER_SUBTLE}; }}")
+        card.setStyleSheet(f"#historyRow {{ background-color: {theme.BG_CARD}; border-bottom: 1px solid {theme.BORDER_SUBTLE}; }}")
         v = QVBoxLayout(card)
         v.setContentsMargins(4, 14, 4, 14)
         v.setSpacing(8)
@@ -321,7 +323,7 @@ class HistoryTab(QWidget):
 
         polished_label = QLabel(row["polished_transcript"])
         polished_label.setWordWrap(True)
-        polished_label.setStyleSheet(f"color: #E2E8F0; font-size: 10pt; line-height: 1.6;")
+        polished_label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 10pt; line-height: 1.6;")
         v.addWidget(polished_label)
 
         raw_toggle = QPushButton("▶ Show Raw Transcript")

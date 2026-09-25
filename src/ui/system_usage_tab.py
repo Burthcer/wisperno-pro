@@ -82,7 +82,7 @@ class SystemUsageTab(QWidget):
         self.vram_sub_label = QLabel("")
         self.vram_sub_label.setWordWrap(True)
         self.vram_sub_label.setStyleSheet(
-            f"color: {theme.ACCENT_PRIMARY}; font-weight: 600; font-family: {theme.FONT_FAMILY_MONO}; padding-top: 2px;"
+            f"color: {theme.TEXT_PRIMARY}; font-weight: 600; padding-top: 2px;"
         )
         vram_layout.addWidget(self.vram_bar)
         vram_layout.addWidget(self.vram_label)
@@ -106,7 +106,7 @@ class SystemUsageTab(QWidget):
         self.ram_sub_label = QLabel("")
         self.ram_sub_label.setWordWrap(True)
         self.ram_sub_label.setStyleSheet(
-            f"color: {theme.ACCENT_PRIMARY}; font-weight: 600; font-family: {theme.FONT_FAMILY_MONO}; padding-top: 2px;"
+            f"color: {theme.TEXT_PRIMARY}; font-weight: 600; padding-top: 2px;"
         )
         ram_layout.addWidget(self.ram_bar)
         ram_layout.addWidget(self.ram_label)

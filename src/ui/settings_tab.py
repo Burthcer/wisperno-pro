@@ -45,26 +45,26 @@ def _show_help_dialog(parent, title: str, what: str, recommended: str) -> None:
     dlg.setWindowTitle(title)
     dlg.setMinimumSize(520, 360)
     dlg.setStyleSheet(
-        f"QDialog {{ background-color: #161622; border: 1px solid #2E2E42; border-radius: 12px; }}"
+        f"QDialog {{ background-color: {theme.BG_APP}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 12px; }}"
     )
     v = QVBoxLayout(dlg)
     v.setContentsMargins(28, 24, 28, 24)
     v.setSpacing(10)
 
     heading = QLabel(title)
-    heading.setStyleSheet("font-size: 15pt; font-weight: 700; color: #FFFFFF;")
+    heading.setStyleSheet(f"font-family: {theme.FONT_FAMILY_DISPLAY}; font-size: 16pt; color: {theme.TEXT_PRIMARY};")
     heading.setWordWrap(True)
     v.addWidget(heading)
 
     def _subhead(text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet("font-weight: 600; color: #818CF8; margin-top: 8px; font-size: 10pt;")
+        lbl.setStyleSheet(f"font-weight: 600; color: {theme.ACCENT_PRIMARY_ACTIVE}; margin-top: 8px; font-size: 10pt;")
         return lbl
 
     def _body(text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setWordWrap(True)
-        lbl.setStyleSheet("color: #D1D5DB; font-size: 13px; line-height: 1.5;")
+        lbl.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 13px; line-height: 1.5;")
         return lbl
 
     v.addWidget(_subhead("What it does"))
@@ -77,11 +77,7 @@ def _show_help_dialog(parent, title: str, what: str, recommended: str) -> None:
     btn_row.addStretch()
     got_it_btn = QPushButton("Got it")
     got_it_btn.setFixedWidth(140)
-    got_it_btn.setStyleSheet(
-        f"QPushButton {{ background-color: {theme.ACCENT_PRIMARY}; color: white; border: none; "
-        f"border-radius: 8px; padding: 9px 0; font-weight: 600; }}"
-        f"QPushButton:hover {{ background-color: {theme.ACCENT_PRIMARY_HOVER}; }}"
-    )
+    got_it_btn.setObjectName("primary")
     got_it_btn.clicked.connect(dlg.accept)
     btn_row.addWidget(got_it_btn)
     btn_row.addStretch()
@@ -127,11 +123,11 @@ def _no_wheel(widget):
 
 
 def _shortcut_card(title: str, description: str):
-    """An elevated surface card (#181824, 12px padding) holding one shortcut recorder,
+    """An elevated surface card (12px padding) holding one shortcut recorder,
     so paired shortcuts sit side-by-side in a two-column grid instead of full-width rows."""
     frame = QFrame(objectName="shortcutCard")
     # Scoped by id - an unscoped style cascades to (and boxes) every label inside.
-    frame.setStyleSheet("#shortcutCard { background-color: #181824; border: 1px solid #262638; border-radius: 10px; }")
+    frame.setStyleSheet(f"#shortcutCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}")
     v = QVBoxLayout(frame)
     v.setContentsMargins(12, 12, 12, 12)
     heading = QLabel(title)
@@ -226,6 +222,8 @@ class _GeneralSettings(QWidget):
 
         self.level_meter = QProgressBar()
         self.level_meter.setRange(0, 100)
+        self.level_meter.setTextVisible(False)
+        self.level_meter.setFixedHeight(6)
         layout.addWidget(self.level_meter)
         self.test_mic_btn = QPushButton("Test Microphone (3s)")
         self.test_mic_btn.clicked.connect(self._test_mic)
@@ -525,8 +523,8 @@ class _AdvancedSettings(QWidget):
         # Scoped by id: a bare "QFrame { }" also matched every QLabel inside
         # (QLabel is a QFrame), boxing each label in its own border.
         preset_card.setStyleSheet(
-            f"#presetCard {{ background-color: #12121A; border: 1px solid #1E1E2C; "
-            f"border-radius: 12px; }}"
+            f"#presetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; "
+            f"border-radius: 14px; }}"
         )
         preset_layout = QVBoxLayout(preset_card)
         preset_layout.setContentsMargins(20, 20, 20, 20)
@@ -538,12 +536,8 @@ class _AdvancedSettings(QWidget):
         )
         preset_row.addWidget(preset_title)
         preset_row.addStretch()
-        compare_btn = QPushButton("Compare Presets & Benchmarks")
-        compare_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {theme.ACCENT_PRIMARY}; color: white; border: none; "
-            f"border-radius: 8px; padding: 6px 14px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background-color: {theme.ACCENT_PRIMARY_HOVER}; }}"
-        )
+        # "&&": a single "&" is a Qt mnemonic marker and was silently dropped from the label.
+        compare_btn = QPushButton("Compare Presets && Benchmarks")
         compare_btn.clicked.connect(self._show_compare_presets)
         preset_row.addWidget(compare_btn)
         preset_layout.addLayout(preset_row)
@@ -856,7 +850,7 @@ class _AdvancedSettings(QWidget):
         dlg.setStyleSheet(f"QDialog {{ background-color: {theme.BG_APP}; }}")
         v = QVBoxLayout(dlg)
         heading = QLabel("Compare Engine Presets")
-        heading.setStyleSheet(f"font-size: 14pt; font-weight: 700; color: {theme.TEXT_PRIMARY};")
+        heading.setStyleSheet(f"font-family: {theme.FONT_FAMILY_DISPLAY}; font-size: 16pt; color: {theme.TEXT_PRIMARY};")
         v.addWidget(heading)
         v.addWidget(_desc_label(
             f'<span style="color:{theme.TEXT_SECONDARY};">All tiers run 100% locally, on this machine, '
@@ -867,7 +861,7 @@ class _AdvancedSettings(QWidget):
         cards_row = QHBoxLayout()
         for key, preset in MODEL_PRESETS.items():
             card = QFrame(objectName="presetCompareCard")
-            card.setStyleSheet("#presetCompareCard { background-color: #181824; border: 1px solid #262638; border-radius: 10px; }")
+            card.setStyleSheet(f"#presetCompareCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}")
             cv = QVBoxLayout(card)
             cv.setContentsMargins(12, 12, 12, 12)
             title = QLabel(preset["label"])

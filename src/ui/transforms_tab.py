@@ -85,12 +85,10 @@ class _TransformsHub(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setStyleSheet(f"background-color: {theme.BG_APP}; border: none;")
-        self.scroll.viewport().setStyleSheet(f"background-color: {theme.BG_APP};")
+        self.scroll.setStyleSheet("QScrollArea { border: none; }")
         outer.addWidget(self.scroll)
 
         content = QWidget()
-        content.setStyleSheet(f"background-color: {theme.BG_APP};")
         self.scroll.setWidget(content)
         layout = QVBoxLayout(content)
 
@@ -98,7 +96,7 @@ class _TransformsHub(QWidget):
         header = QHBoxLayout()
         title_col = QVBoxLayout()
         title = QLabel("Transforms")
-        title.setStyleSheet(f"font-size: 18pt; font-weight: 700; color: {theme.TEXT_PRIMARY};")
+        title.setObjectName("sectionTitle")
         subtitle = QLabel("Apply specialized styles to dictated or highlighted text.")
         subtitle.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 10pt;")
         title_col.addWidget(title)
@@ -107,10 +105,7 @@ class _TransformsHub(QWidget):
         header.addStretch()
 
         create_btn = QPushButton("+ Create New Transform")
-        create_btn.setStyleSheet(
-            f"background-color: {theme.ACCENT_PRIMARY}; color: white; border: none; "
-            f"border-radius: 8px; padding: 9px 18px; font-weight: 600;"
-        )
+        create_btn.setObjectName("primary")
         create_btn.clicked.connect(self._create_new)
         header.addWidget(create_btn)
         layout.addLayout(header)
@@ -118,7 +113,7 @@ class _TransformsHub(QWidget):
 
         row = QHBoxLayout()
         my_title = QLabel("My Transforms")
-        my_title.setStyleSheet(f"font-size: 13pt; font-weight: 700; color: {theme.TEXT_PRIMARY};")
+        my_title.setStyleSheet(f"font-family: {theme.FONT_FAMILY_DISPLAY}; font-size: 14pt; color: {theme.TEXT_PRIMARY};")
         row.addWidget(my_title)
         row.addStretch()
         reset_btn = QPushButton("Reset to defaults")
@@ -168,10 +163,10 @@ class _TransformsHub(QWidget):
         self.grid.addWidget(self._create_card(), create_row, create_col)
 
     def _transform_card(self, t: dict) -> QFrame:
-        card = QFrame()
+        card = QFrame(objectName="transformCard")
         card.setStyleSheet(
-            f"QFrame {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 12px; }}"
-            f"QFrame:hover {{ border-color: {theme.ACCENT_PRIMARY}; }}"
+            f"#transformCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}"
+            f"#transformCard:hover {{ border-color: {theme.BORDER_STRONG}; }}"
         )
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setMinimumHeight(140)
@@ -192,8 +187,8 @@ class _TransformsHub(QWidget):
         return card
 
     def _create_card(self) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet(f"background-color: transparent; border: 1.5px dashed {theme.BORDER_SUBTLE}; border-radius: 12px;")
+        card = QFrame(objectName="createCard")
+        card.setStyleSheet(f"#createCard {{ background-color: transparent; border: 1px dashed {theme.BORDER_STRONG}; border-radius: 14px; }}")
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setMinimumHeight(140)
         v = QVBoxLayout(card)
@@ -233,10 +228,7 @@ class _TransformEditor(QWidget):
         )
         header.addWidget(self.title_edit, 1)
         save_btn = QPushButton("Save")
-        save_btn.setStyleSheet(
-            f"background-color: {theme.ACCENT_PRIMARY}; color: white; border: none; "
-            f"border-radius: 8px; padding: 7px 16px; font-weight: 600;"
-        )
+        save_btn.setObjectName("primary")
         save_btn.clicked.connect(self._save)
         header.addWidget(save_btn)
         self.delete_btn = QPushButton("Delete")

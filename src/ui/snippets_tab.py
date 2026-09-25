@@ -5,6 +5,7 @@ toggle. When a dictated transcript exactly matches a trigger phrase, the
 expansion is injected immediately - the LLM transform step is skipped entirely.
 """
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QFrame, QScrollArea,
@@ -61,6 +62,9 @@ class SnippetsTab(QWidget):
         grid_container = QWidget()
         self.grid = QGridLayout(grid_container)
         self.grid.setSpacing(12)
+        # Pack cards at the top at their natural height - otherwise the rows
+        # share the whole scroll height and each card balloons with empty space.
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll.setWidget(grid_container)
         layout.addWidget(self.scroll, 1)
 

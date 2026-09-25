@@ -20,26 +20,26 @@ QWidget#liveRoot {{
     border-radius: 12px;
 }}
 QLabel#liveTitle {{ color: {theme.PILL_TEXT_PRIMARY}; font-weight: 600; font-size: 10pt; }}
-QLabel#liveTimer {{ color: {theme.TEXT_SECONDARY}; font-size: 9pt; }}
+QLabel#liveTimer {{ color: {theme.PILL_TEXT}; font-size: 9pt; }}
 QTextEdit#liveTranscript {{
-    background-color: #17171F;
+    background-color: {theme.PILL_SURFACE};
     border: 1px solid {theme.PILL_BORDER};
     border-radius: 8px;
-    color: {theme.TEXT_PRIMARY};
+    color: {theme.PILL_TEXT_PRIMARY};
     padding: 8px;
     font-size: 10pt;
 }}
 QPushButton {{
-    background-color: {theme.BG_CARD};
-    border: 1px solid {theme.BORDER_SUBTLE};
+    background-color: {theme.PILL_BUTTON};
+    border: 1px solid {theme.PILL_BORDER};
     border-radius: 7px;
     padding: 6px 14px;
-    color: {theme.TEXT_PRIMARY};
+    color: {theme.PILL_TEXT_PRIMARY};
 }}
-QPushButton:hover {{ background-color: {theme.BG_CARD_HOVER}; }}
-QPushButton#stopSave {{ background-color: {theme.ACCENT_PRIMARY}; border: none; color: white; font-weight: 600; }}
+QPushButton:hover {{ background-color: {theme.PILL_BUTTON_HOVER}; }}
+QPushButton#stopSave {{ background-color: {theme.ACCENT_PROCESSING}; border: none; color: white; font-weight: 600; }}
 QPushButton#stopSave:hover {{ background-color: {theme.ACCENT_PRIMARY_HOVER}; }}
-QPushButton#discardBtn {{ color: {theme.DANGER}; }}
+QPushButton#discardBtn {{ color: {theme.ACCENT_RECORDING}; }}
 """
 
 
@@ -121,7 +121,7 @@ class LiveTranscriptionWindow(QWidget):
 
     def _blink(self) -> None:
         if self._paused:
-            self.dot.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12pt;")
+            self.dot.setStyleSheet(f"color: {theme.PILL_TEXT}; font-size: 12pt;")
             return
         self._blink_on = not self._blink_on
         color = theme.ACCENT_RECORDING if self._blink_on else theme.ACCENT_RECORDING_DIM
@@ -178,10 +178,10 @@ class LiveTranscriptionWindow(QWidget):
 
         confirmed_html = html.escape(self._confirmed_plain)
         speculative_html = (
-            f' <span style="color:{theme.TEXT_SECONDARY}; font-style:italic;">{html.escape(self._speculative_plain)}</span>'
+            f' <span style="color:{theme.PILL_TEXT}; font-style:italic;">{html.escape(self._speculative_plain)}</span>'
             if self._speculative_plain else ""
         )
-        self.transcript_view.setHtml(f'<div style="color:{theme.TEXT_PRIMARY};">{confirmed_html}{speculative_html}</div>')
+        self.transcript_view.setHtml(f'<div style="color:{theme.PILL_TEXT_PRIMARY};">{confirmed_html}{speculative_html}</div>')
         scrollbar = self.transcript_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
