@@ -10,6 +10,8 @@ from typing import Dict, Optional, Any, Union
 import yaml
 from pydantic import BaseModel, Field
 
+from src.app_context import DEFAULT_APP_STYLES
+
 
 def get_base_dir() -> Path:
     """
@@ -200,6 +202,15 @@ class AppConfig(BaseModel):
     minimize_to_tray: bool = Field(default=True, description="Closing the dashboard/pill minimizes to tray instead of quitting")
     pill_always_on_top: bool = Field(default=True, description="Keep the floating pill above other windows, including fullscreen apps/games")
     audio_cues_enabled: bool = Field(default=False, description="Play a short tone when dictation starts and stops")
+    app_styles_enabled: bool = Field(
+        default=True,
+        description="Format dictation for the app it's typed into (see src/app_context.py): chat apps drop "
+                    "a one-line message's final period, editors/terminals also skip the trailing space.",
+    )
+    app_styles: Dict[str, str] = Field(
+        default_factory=lambda: dict(DEFAULT_APP_STYLES),
+        description="App executable name (lowercase, e.g. 'slack.exe') -> 'default' | 'messaging' | 'code'.",
+    )
     save_recordings_for_testing: bool = Field(
         default=False,
         description="Save each dictation's audio + transcripts to %APPDATA%\\Wisperno\\recordings for "

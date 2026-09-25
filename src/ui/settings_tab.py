@@ -13,8 +13,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QCheckBox, QFileDialog, QMessageBox,
     QProgressBar, QTabWidget, QSpinBox, QSlider, QFrame, QDialog, QScrollArea,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
 )
 
+from src.app_context import STYLE_LABELS, STYLES
 from src.presets import BENCHMARK_MATRIX, DEFAULT_PRESET, MODEL_PRESETS
 from src.ui import theme
 from src.ui.scroll_utils import make_scrollable_layout
@@ -233,8 +235,8 @@ class _GeneralSettings(QWidget):
 
         tap_card, tap_v = _shortcut_card(
             "Tap to Toggle Dictation",
-            "Tap once to start listening, tap again to stop. Instant speech-to-text with automatic "
-            "list detection and filler removal (sub-second, zero LLM delay by default).",
+            "Tap once to start listening, tap again to stop. Speech-to-text with smart cleanup: filler "
+            "removal, \"wait no\" corrections and lists (short, clean phrases stay instant).",
         )
         self.tap_enable_cb = QCheckBox("Enable Tap to Toggle")
         self.tap_enable_cb.setChecked(engine.config.tap_toggle_enabled)
@@ -340,7 +342,7 @@ class _GeneralSettings(QWidget):
         layout.addWidget(self.always_on_top_cb)
 
         # --- Audio Feedback ---
-        layout.addWidget(_label_title("Audio Feedback"))
+        layout.addWidget(_label_title("Typing & Feedback"))
 
         self.audio_cues_cb = QCheckBox("Play a Sound When Dictation Starts/Stops")
         self.audio_cues_cb.setChecked(engine.config.audio_cues_enabled)
@@ -358,6 +360,42 @@ class _GeneralSettings(QWidget):
         self.trailing_space_cb.stateChanged.connect(lambda s: engine.set_trailing_space(s != 0))
         layout.addWidget(self.trailing_space_cb)
 
+        # --- Per-app styles (src/app_context.py) ---
+        layout.addWidget(_label_title("Per-App Styles"))
+        self.app_styles_cb = QCheckBox("Adapt Formatting to the App You're Typing In")
+        self.app_styles_cb.setToolTip(
+            "Chat apps: a one-line message drops its final period.\n"
+            "Code editors / terminals: also no final period, and no trailing space.\n"
+            "Everything else: normal sentences."
+        )
+        self.app_styles_cb.setChecked(engine.config.app_styles_enabled)
+        self.app_styles_cb.stateChanged.connect(self._on_app_styles_toggled)
+        layout.addWidget(self.app_styles_cb)
+        self.app_styles_table = QTableWidget(0, 3)
+        self.app_styles_table.setHorizontalHeaderLabels(["APP (.EXE)", "STYLE", ""])
+        header = self.app_styles_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.app_styles_table.setColumnWidth(2, 44)
+        self.app_styles_table.verticalHeader().setVisible(False)
+        self.app_styles_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.app_styles_table.setMinimumHeight(180)
+        layout.addWidget(self.app_styles_table)
+        add_row = QHBoxLayout()
+        self.app_name_in = QLineEdit(placeholderText="App to add, e.g. obsidian.exe")
+        self.app_style_in = _no_wheel(QComboBox())
+        for style in STYLES:
+            self.app_style_in.addItem(STYLE_LABELS[style], style)
+        add_app_btn = QPushButton("Add App")
+        add_app_btn.clicked.connect(self._add_app_style)
+        self.app_name_in.returnPressed.connect(self._add_app_style)
+        add_row.addWidget(self.app_name_in, 1)
+        add_row.addWidget(self.app_style_in, 1)
+        add_row.addWidget(add_app_btn)
+        layout.addLayout(add_row)
+        self._refresh_app_styles()
+
         # --- Testing ---
         layout.addWidget(_label_title("Testing"))
         self.save_recordings_cb = QCheckBox("Save Recordings for Testing (stores your dictation audio on this PC)")
@@ -373,6 +411,44 @@ class _GeneralSettings(QWidget):
         layout.addWidget(open_recordings_btn, alignment=Qt.AlignLeft)
 
         layout.addStretch()
+
+    def _refresh_app_styles(self) -> None:
+        styles = self.engine.config.app_styles
+        apps = sorted(styles, key=lambda a: (STYLES.index(styles[a]) if styles[a] in STYLES else 0, a))
+        self.app_styles_table.setRowCount(len(apps))
+        for row, app in enumerate(apps):
+            item = QTableWidgetItem(app)
+            self.app_styles_table.setItem(row, 0, item)
+            combo = _no_wheel(QComboBox())
+            for style in STYLES:
+                combo.addItem(STYLE_LABELS[style], style)
+            combo.setCurrentIndex(STYLES.index(styles[app]) if styles[app] in STYLES else 0)
+            combo.currentIndexChanged.connect(lambda _i, a=app, c=combo: self.engine.set_app_style(a, c.currentData()))
+            self.app_styles_table.setCellWidget(row, 1, combo)
+            remove = QPushButton("✕")
+            remove.setToolTip(f"Remove {app} (it will use normal sentences)")
+            remove.setFlat(True)
+            remove.clicked.connect(lambda _c=False, a=app: self._remove_app_style(a))
+            self.app_styles_table.setCellWidget(row, 2, remove)
+        self.app_styles_table.setEnabled(self.engine.config.app_styles_enabled)
+
+    def _on_app_styles_toggled(self, state: int) -> None:
+        self.engine.set_app_styles_enabled(state != 0)
+        self.app_styles_table.setEnabled(state != 0)
+
+    def _add_app_style(self) -> None:
+        app = self.app_name_in.text().strip().lower()
+        if not app:
+            return
+        if not app.endswith(".exe"):
+            app += ".exe"
+        self.engine.set_app_style(app, self.app_style_in.currentData())
+        self.app_name_in.clear()
+        self._refresh_app_styles()
+
+    def _remove_app_style(self, app: str) -> None:
+        self.engine.set_app_style(app, None)
+        self._refresh_app_styles()
 
     def _open_recordings_folder(self) -> None:
         import os

@@ -25,6 +25,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from loguru import logger
 
 from src.audio_recorder import AudioRecorder
+from src.app_context import apply_app_style, foreground_app, style_for_app, wants_trailing_space
 from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
@@ -150,7 +151,8 @@ class InferenceWorker(QThread):
         self, audio_array, transcriber, transformer, injector, db, snippets,
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
-        save_recording: bool = False, trailing_space: bool = False, parent: Optional[QObject] = None,
+        save_recording: bool = False, trailing_space: bool = False, app_styles: Optional[Dict[str, str]] = None,
+        parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -177,6 +179,8 @@ class InferenceWorker(QThread):
         # Settings -> General -> "Save Recordings for Testing" (off by default).
         self.save_recording = save_recording
         self.trailing_space = trailing_space
+        # Per-app styles (src/app_context.py); None = off.
+        self.app_styles = app_styles
 
     def run(self) -> None:
         try:
@@ -212,7 +216,15 @@ class InferenceWorker(QThread):
             else:
                 final_text = self.transformer.transform(raw_text, mode=self.mode)
 
-            injected = self.injector.inject_text(with_trailing_space(final_text) if self.trailing_space else final_text)
+            style = "default"
+            if self.app_styles is not None and normalized not in self.snippets:
+                app = foreground_app()
+                style = style_for_app(app, self.app_styles)
+                if style != "default":
+                    final_text = apply_app_style(final_text, style)
+                    logger.info(f"[APP STYLE] {app} -> '{style}' formatting.")
+            add_space = self.trailing_space and wants_trailing_space(style)
+            injected = self.injector.inject_text(with_trailing_space(final_text) if add_space else final_text)
             latency_ms = (time.perf_counter() - t0) * 1000
 
             # A Transforms-hub hotkey drove this recording (status_label set) vs

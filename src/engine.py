@@ -423,6 +423,7 @@ class WispernoEngine(QObject):
             use_direct_formatter=not self._llm_dictation_enabled(),
             save_recording=self.config.save_recordings_for_testing,
             trailing_space=self.config.injector.trailing_space,
+            app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
         )
         worker.state_changed.connect(self.state_changed)
         worker.result_ready.connect(self.history_added)
@@ -503,6 +504,7 @@ class WispernoEngine(QObject):
                 status_label=transform["title"],
                 save_recording=self.config.save_recordings_for_testing,
                 trailing_space=self.config.injector.trailing_space,
+                app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
             )
         else:
             logger.info(f"[TRANSFORM] No speech captured for '{transform_id}' - trying selected text instead.")
@@ -742,6 +744,21 @@ class WispernoEngine(QObject):
 
     def set_audio_cues_enabled(self, enabled: bool) -> None:
         self.config.audio_cues_enabled = enabled
+        self.save_config()
+
+    def set_app_styles_enabled(self, enabled: bool) -> None:
+        self.config.app_styles_enabled = enabled
+        self.save_config()
+
+    def set_app_style(self, app: str, style: Optional[str]) -> None:
+        """style=None removes the app from the table (it then gets 'default')."""
+        app = app.strip().lower()
+        if not app:
+            return
+        if style is None:
+            self.config.app_styles.pop(app, None)
+        else:
+            self.config.app_styles[app] = style
         self.save_config()
 
     def set_trailing_space(self, enabled: bool) -> None:
