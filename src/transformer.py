@@ -56,6 +56,7 @@ from typing import List
 from llama_cpp import Llama
 from src.config import LLMConfig, get_base_dir
 from src.direct_formatter import capitalize_pronoun_i, normalize_punctuation_spacing, _cap_sentences
+from src.list_formatter import format_lists_in_text
 from src.swear_filter import apply_profanity_filter, profanity_was_censored
 
 # Above this word count, split into sentence-aligned chunks before transforming.
@@ -578,6 +579,11 @@ class Transformer:
                     logger.warning(f"[FALLBACK_DEBUG] Reason: {reason} | Raw: {text!r} | Output: {result!r}")
                     result = basic_capitalize(text.strip())
                     self.last_fallback_applied = True
+            if mode == "polish":
+                # Deterministic backstop for the prompt's LISTS rule: whatever
+                # the model did, spoken enumerations that survived as prose
+                # ("First, ... Second, ...") still become a real list.
+                result = format_lists_in_text(result)
             elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.info(f"Transformed [{mode}] ({len(text)} -> {len(result)} chars) in {elapsed_ms:.1f}ms.")
             if not result.strip() or result.strip() == text.strip():

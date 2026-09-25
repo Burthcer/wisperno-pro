@@ -111,6 +111,15 @@ prompts:
     word.
 
 
+    11. LISTS: when the user enumerates points with spoken cues ("first ... second
+    ... third", "one ... two ...", "number one", "step one", "firstly ... lastly",
+    "and finally"), format them as a numbered list: an optional intro line ending
+    in a colon, then one item per line starting "1. ", "2. ", and so on. Drop the
+    spoken cue words themselves but keep every item''s full content. Only make a list
+    when such cues were actually spoken - sentences that merely mention "the first
+    time" or "at first" stay normal prose.
+
+
     MANDATORY FIDELITY RULES:
 
     - NEVER summarize, condense, or omit any thoughts, details, or sentences spoken
@@ -177,6 +186,18 @@ prompts:
     Input: "i was reading this article about machine learning and it mentioned transformers"
 
     Output: I was reading this article about machine learning, and it mentioned transformers.
+
+
+    Input: "so there are three problems first the build is slow second the tests are
+    flaky and third nobody owns the pipeline"
+
+    Output: There are three problems:
+
+    1. The build is slow.
+
+    2. The tests are flaky.
+
+    3. Nobody owns the pipeline.
 
 
     Input: "i''m sorry i''m running late to the meeting today"

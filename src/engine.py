@@ -102,6 +102,7 @@ class WispernoEngine(QObject):
         self.db.free_up_alt_v_shortcut()
         self.db.seed_grammar_correct_transform()
         self.db.seed_ai_relay_transform()
+        self.db.update_polish_prompt_with_list_rules()
         self.vocabulary = Vocabulary(db=self.db)
 
         self.audio_worker: Optional[AudioWorker] = None

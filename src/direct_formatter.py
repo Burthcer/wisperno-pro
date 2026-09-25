@@ -10,6 +10,8 @@ for the capitalization/terminal-punctuation pass at the end.
 
 import re
 
+from src.list_formatter import format_spoken_list
+
 # A period/!/?/:/, immediately followed by a letter with NO space at all
 # ("Hello.How are you?") - restricted to letters, never digits, so real
 # numeric text (decimals like "3.14", thousands separators like "1,234") is
@@ -32,26 +34,13 @@ _STUTTER_RE = re.compile(r"\b(\w+)(\.?)(?:\s+\1\b\.?)+", re.IGNORECASE)
 # Spoken developer/terminal shorthand -> the literal symbol.
 _SLASH_COMMAND_RE = re.compile(r"\b(?:slash|forward slash)\s*([a-zA-Z0-9_\-]+)\b", re.IGNORECASE)
 # Lookaround-guarded (word on both sides) so an isolated "dash" used as a
-# spoken bullet-list cue (see _BULLET_CUE below) isn't eaten by this pass.
+# spoken bullet-list cue (see src/list_formatter.py) isn't eaten by this pass.
 _DASH_WORD_RE = re.compile(r"(?<=\w)\s+(?:dash|hyphen)\s+(?=\w)", re.IGNORECASE)
 _UNDERSCORE_WORD_RE = re.compile(r"(?<=\w)\s+underscore\s+(?=\w)", re.IGNORECASE)
 _BACKTICK_RE = re.compile(r"\bbacktick\b", re.IGNORECASE)
 # A bare command ("/compact") shouldn't get a terminal "." appended by the
 # normal sentence-punctuation pass.
 _BARE_COMMAND_RE = re.compile(r"^/[\w\-]+$")
-
-_ORDINAL_CUE = (
-    r"firstly|first|secondly|second|thirdly|third|fourthly|fourth|fifthly|fifth|"
-    r"number\s+(?:one|two|three|four|five|six|seven|eight|nine|ten)"
-)
-_NUMBERED_SPLIT_RE = re.compile(rf"\b({_ORDINAL_CUE})\b", re.IGNORECASE)
-
-_BULLET_CUE = r"bullet point|point one|next point|dash"
-_BULLET_SPLIT_RE = re.compile(rf"\b({_BULLET_CUE})\b", re.IGNORECASE)
-
-# Below this many cues, treat it as an incidental word in normal speech
-# ("I first went to..."), not an actual spoken enumeration.
-_MIN_LIST_CUES = 2
 
 # Whisper frequently leaves the first-person pronoun lowercase mid-utterance
 # ("i think", "i'm not sure"). \b matches on BOTH sides of a bare "i" even
@@ -121,29 +110,11 @@ def _cap_sentences(text: str) -> str:
     return capitalized[0].upper() + capitalized[1:] if capitalized else capitalized
 
 
-def _split_list(text: str, split_re: re.Pattern) -> list:
-    """Split on a cue pattern; return the item segments (text after each cue),
-    or [] if fewer than _MIN_LIST_CUES cues have REAL content after them.
-
-    Gating on the filtered item count (not the raw cue count) matters: plain
-    prose that happens to use two ordinal words ("first"/"second") with real
-    sentence punctuation between them - e.g. normalize_punctuation_spacing()
-    turning "first.second,third" into "first. second, third" - produces cues
-    with nothing but leftover punctuation between them ('. ', ', '), which
-    isn't a spoken list and must fall through to the normal sentence path,
-    not render as a garbage "1. ." bullet. A genuine spoken list has actual
-    words between cues ("first buy milk second get eggs").
-    """
-    parts = split_re.split(text)
-    items = [i.strip(" ,.") for i in parts[2::2] if re.search(r"[A-Za-z0-9]", i)]
-    if len(items) < _MIN_LIST_CUES:
-        return []
-    return items
-
-
-def format_direct(text: str) -> str:
-    """Zero-LLM dictation cleanup: fillers/stutters out, spoken lists formatted,
-    capitalization/terminal punctuation applied. Runs in well under 10ms."""
+def format_direct(text: str, detect_lists: bool = True) -> str:
+    """Zero-LLM dictation cleanup: fillers/stutters out, spoken lists formatted
+    (src/list_formatter.py), capitalization/terminal punctuation applied. Runs
+    in well under 10ms. detect_lists=False for continuous transcripts (Live
+    Transcription), where "first ... second" is conversation, not dictation."""
     text = text.strip()
     if not text:
         return ""
@@ -155,22 +126,18 @@ def format_direct(text: str) -> str:
     text = capitalize_pronoun_i(text)
     text = _apply_spoken_commands(text)
 
-    numbered_items = _split_list(text, _NUMBERED_SPLIT_RE)
-    if numbered_items:
-        return "\n".join(f"{i + 1}. {_cap_punct(item)}" for i, item in enumerate(numbered_items))
-
-    bullet_items = _split_list(text, _BULLET_SPLIT_RE)
-    if bullet_items:
-        return "\n".join(f"* {_cap_punct(item)}" for item in bullet_items)
-
     if _BARE_COMMAND_RE.match(text.strip()):
         return text.strip()
 
     # Paragraph breaks (src/transcriber.py's pause-based split) are
-    # capitalized/punctuated independently, same as the very first sentence
-    # of the whole utterance - each one starts a fresh thought.
-    paragraphs = [p for p in text.split("\n\n") if p.strip()]
-    return "\n\n".join(_cap_punct(_cap_sentences(p)) for p in paragraphs)
+    # formatted independently, same as the very first sentence of the whole
+    # utterance - each one starts a fresh thought, and each can be a list.
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    formatted = []
+    for para in paragraphs:
+        listed = format_spoken_list(para) if detect_lists else None
+        formatted.append(listed or _cap_punct(_cap_sentences(para)))
+    return "\n\n".join(formatted)
 
 
 def _demo() -> None:
@@ -181,7 +148,7 @@ def _demo() -> None:
 
     r2 = format_direct("we need three things first buy milk second get eggs third go home")
     lines = r2.split("\n")
-    assert lines == ["1. Buy milk.", "2. Get eggs.", "3. Go home."], r2
+    assert lines == ["We need three things:", "1. Buy milk.", "2. Get eggs.", "3. Go home."], r2
 
     r3 = format_direct("the the client wants changes")
     assert r3 == "The client wants changes.", r3

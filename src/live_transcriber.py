@@ -185,7 +185,7 @@ def clean_live_transcript(raw_text: str) -> str:
     """
     if not raw_text or not raw_text.strip():
         return ""
-    cleaned = format_direct(raw_text)
+    cleaned = format_direct(raw_text, detect_lists=False)  # a conversation, not a dictated list
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
     if not sentences:
         return cleaned

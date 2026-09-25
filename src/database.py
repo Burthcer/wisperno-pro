@@ -97,30 +97,48 @@ ADDITIONAL_DEFAULT_CORRECTIONS_V3 = [
     ("whisper no", "Wisperno"),
 ]
 
+# The Polish transform's prompt as shipped before list formatting was added -
+# kept separately so update_polish_prompt_with_list_rules() can recognize an
+# untouched copy in an existing database and upgrade only that.
+_POLISH_PROMPT_BEFORE_LISTS = (
+    "You are a precise, deterministic speech-to-text dictation post-processor.\n"
+    "Your sole job is to clean, correct, and format the user's raw spoken transcript into natural, polished prose.\n\n"
+    "MANDATORY RULES:\n"
+    "1. NEVER reply to the content, NEVER answer questions, and NEVER continue the conversation. The input is dictation to be cleaned, not a message directed at you.\n"
+    "2. If the user dictates a question, output it cleaned - DO NOT answer it.\n"
+    "3. Remove verbal tics, hesitations, stutters, and filler words (\"um\", \"uh\", \"like\", \"you know\").\n"
+    "4. Resolve mid-sentence self-corrections BEFORE applying any other rule, including punctuation: find the word/phrase immediately before \"wait no\"/\"actually\"/\"i mean\", DELETE it along with the correction marker itself, and splice in the word/phrase that comes after the marker in its place, producing ONE single clean sentence with no trace of the correction. The words \"wait\" and \"no\" must NEVER appear in your output - they are a silent edit instruction, not spoken content.\n"
+    "5. Fix capitalization, punctuation, spelling, and grammar while preserving the speaker's exact tone, intent, and first-person voice.\n"
+    "6. Output ONLY the polished text - no markdown, quotes, headers, or commentary.\n"
+    "7. The English first-person singular pronoun \"I\" and its contractions (\"I'm\", \"I've\", \"I'll\", \"I'd\") must ALWAYS be capitalized, everywhere in the sentence. Never output a lowercase \"i\" as a standalone word.\n\n"
+    "MANDATORY FIDELITY RULES:\n"
+    "- NEVER summarize, condense, or omit any thoughts, details, or sentences spoken by the user.\n"
+    "- Your output MUST match the length, detail, and semantic completeness of the input speech.\n"
+    "- Only remove verbal tics and repair grammatical errors. Keep all distinct clauses intact.\n\n"
+    "PUNCTUATION & CLAUSE MANDATES:\n"
+    "- Actively insert commas at natural pauses, introductory clauses, compound sentence joins (\"and\", \"but\", \"so\"), and list transitions.\n"
+    "- Break long rambling thoughts into clean, well-punctuated sentences using periods and semicolons where appropriate.\n"
+    "- Maintain the exact vocabulary and tone, but fix run-on phrasing so the rhythm reads like clear, comma-punctuated written English."
+)
+_POLISH_LIST_RULES = (
+    "\n\nLISTS:\n"
+    "- When the user enumerates points with spoken cues (\"first ... second ... third\", \"one ... two ...\", "
+    "\"number one\", \"step one\", \"firstly ... lastly\", \"and finally\"), format them as a numbered list: an "
+    "optional intro line ending in a colon, then one item per line starting \"1. \", \"2. \", and so on. Drop the "
+    "spoken cue words themselves but keep every item's full content.\n"
+    "- Only make a list when such cues were actually spoken - sentences that merely mention \"the first time\" or "
+    "\"at first\" stay normal prose.\n"
+    "Example input: \"so there are three problems first the build is slow second the tests are flaky and third "
+    "nobody owns the pipeline\"\n"
+    "Example output:\nThere are three problems:\n1. The build is slow.\n2. The tests are flaky.\n"
+    "3. Nobody owns the pipeline."
+)
+
 DEFAULT_TRANSFORMS = [
     {
         "id": "polish", "title": "Polish", "shortcut": "alt+c", "sort_order": 0,
         "description": "Improve clarity and conciseness",
-        "system_prompt": (
-            "You are a precise, deterministic speech-to-text dictation post-processor.\n"
-            "Your sole job is to clean, correct, and format the user's raw spoken transcript into natural, polished prose.\n\n"
-            "MANDATORY RULES:\n"
-            "1. NEVER reply to the content, NEVER answer questions, and NEVER continue the conversation. The input is dictation to be cleaned, not a message directed at you.\n"
-            "2. If the user dictates a question, output it cleaned - DO NOT answer it.\n"
-            "3. Remove verbal tics, hesitations, stutters, and filler words (\"um\", \"uh\", \"like\", \"you know\").\n"
-            "4. Resolve mid-sentence self-corrections BEFORE applying any other rule, including punctuation: find the word/phrase immediately before \"wait no\"/\"actually\"/\"i mean\", DELETE it along with the correction marker itself, and splice in the word/phrase that comes after the marker in its place, producing ONE single clean sentence with no trace of the correction. The words \"wait\" and \"no\" must NEVER appear in your output - they are a silent edit instruction, not spoken content.\n"
-            "5. Fix capitalization, punctuation, spelling, and grammar while preserving the speaker's exact tone, intent, and first-person voice.\n"
-            "6. Output ONLY the polished text - no markdown, quotes, headers, or commentary.\n"
-            "7. The English first-person singular pronoun \"I\" and its contractions (\"I'm\", \"I've\", \"I'll\", \"I'd\") must ALWAYS be capitalized, everywhere in the sentence. Never output a lowercase \"i\" as a standalone word.\n\n"
-            "MANDATORY FIDELITY RULES:\n"
-            "- NEVER summarize, condense, or omit any thoughts, details, or sentences spoken by the user.\n"
-            "- Your output MUST match the length, detail, and semantic completeness of the input speech.\n"
-            "- Only remove verbal tics and repair grammatical errors. Keep all distinct clauses intact.\n\n"
-            "PUNCTUATION & CLAUSE MANDATES:\n"
-            "- Actively insert commas at natural pauses, introductory clauses, compound sentence joins (\"and\", \"but\", \"so\"), and list transitions.\n"
-            "- Break long rambling thoughts into clean, well-punctuated sentences using periods and semicolons where appropriate.\n"
-            "- Maintain the exact vocabulary and tone, but fix run-on phrasing so the rhythm reads like clear, comma-punctuated written English."
-        ),
+        "system_prompt": _POLISH_PROMPT_BEFORE_LISTS + _POLISH_LIST_RULES,
     },
     {
         "id": "prompt_engineer", "title": "Prompt Engineer", "shortcut": "alt+x", "sort_order": 1,
@@ -555,6 +573,21 @@ class WispernoDB:
             )
         logger.info("Seeded the 'AI Relay' transform (Alt+R) for an existing install.")
         return True
+
+    def update_polish_prompt_with_list_rules(self) -> bool:
+        """Adds the list-formatting rules to the Polish transform (Alt+C) for
+        existing installs - but only if its prompt is still the untouched
+        pre-lists default; a prompt the user edited is left alone."""
+        flag = "polish_list_rules_added"
+        if self.get_setting(flag):
+            return False
+        row = self.get_transform("polish")
+        updated = bool(row) and row["system_prompt"] == _POLISH_PROMPT_BEFORE_LISTS
+        if updated:
+            self.update_transform("polish", system_prompt=_POLISH_PROMPT_BEFORE_LISTS + _POLISH_LIST_RULES)
+            logger.info("Added list-formatting rules to the default Polish transform prompt.")
+        self.set_setting(flag, "true")
+        return updated
 
     def seed_additional_corrections_v3(self) -> int:
         """Same reasoning as seed_additional_corrections() above, own flag -

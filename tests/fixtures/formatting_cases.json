@@ -1,8 +1,172 @@
 [
-  {"name": "filler words", "raw": "um I think we should uh go with option A", "expected": "I think we should go with option A."},
-  {"name": "stutter", "raw": "the the client wants changes", "expected": "The client wants changes."},
-  {"name": "lowercase i", "raw": "i think i'm going to head out, i've already told them i'll be late", "expected": "I think I'm going to head out, I've already told them I'll be late."},
-  {"name": "slash command", "raw": "run slash help to see options", "expected": "Run /help to see options."},
-  {"name": "paragraph pause", "raw": "this is the opening thought\n\nhere is another one after a pause", "expected": "This is the opening thought.\n\nHere is another one after a pause."},
-  {"name": "decimals untouched", "raw": "the value is 3.14 and there were 1,234 attendees", "expected": "The value is 3.14 and there were 1,234 attendees."}
+  {
+    "name": "filler words",
+    "raw": "um I think we should uh go with option A",
+    "expected": "I think we should go with option A."
+  },
+  {
+    "name": "stutter",
+    "raw": "the the client wants changes",
+    "expected": "The client wants changes."
+  },
+  {
+    "name": "lowercase i",
+    "raw": "i think i'm going to head out, i've already told them i'll be late",
+    "expected": "I think I'm going to head out, I've already told them I'll be late."
+  },
+  {
+    "name": "slash command",
+    "raw": "run slash help to see options",
+    "expected": "Run /help to see options."
+  },
+  {
+    "name": "paragraph pause",
+    "raw": "this is the opening thought\n\nhere is another one after a pause",
+    "expected": "This is the opening thought.\n\nHere is another one after a pause."
+  },
+  {
+    "name": "decimals untouched",
+    "raw": "the value is 3.14 and there were 1,234 attendees",
+    "expected": "The value is 3.14 and there were 1,234 attendees."
+  },
+  {
+    "name": "list: unpunctuated ordinals with intro",
+    "raw": "we need three things first buy milk second get eggs third go home",
+    "expected": "We need three things:\n1. Buy milk.\n2. Get eggs.\n3. Go home."
+  },
+  {
+    "name": "list: Whisper-punctuated ordinals, 'and third'",
+    "raw": "There are a few reasons. First, the pricing is too high. Second, the timeline is too short. And third, the team is too small.",
+    "expected": "There are a few reasons:\n1. The pricing is too high.\n2. The timeline is too short.\n3. The team is too small."
+  },
+  {
+    "name": "list: bare numbers",
+    "raw": "My plan for today. One, fix the login bug. Two, update the docs. Three, deploy.",
+    "expected": "My plan for today:\n1. Fix the login bug.\n2. Update the docs.\n3. Deploy."
+  },
+  {
+    "name": "list: digits as Whisper writes them",
+    "raw": "Steps to reproduce 1. Open the app 2. Click save 3. It crashes",
+    "expected": "Steps to reproduce:\n1. Open the app.\n2. Click save.\n3. It crashes."
+  },
+  {
+    "name": "list: number one / number two",
+    "raw": "number one we ship on Friday number two we tell the client",
+    "expected": "1. We ship on Friday.\n2. We tell the client."
+  },
+  {
+    "name": "list: firstly / secondly / lastly",
+    "raw": "Firstly, thanks for the update. Secondly, can we move the meeting? Lastly, I'll send the notes tonight.",
+    "expected": "1. Thanks for the update.\n2. Can we move the meeting?\n3. I'll send the notes tonight."
+  },
+  {
+    "name": "list: first of all ... and finally",
+    "raw": "first of all we need a budget, second we need a team and finally we need a deadline",
+    "expected": "1. We need a budget.\n2. We need a team.\n3. We need a deadline."
+  },
+  {
+    "name": "list: step one / step two",
+    "raw": "step one open settings step two click dictionary step three add the word",
+    "expected": "1. Open settings.\n2. Click dictionary.\n3. Add the word."
+  },
+  {
+    "name": "list: answering a question in points",
+    "raw": "What should we do next? First, fix the bug. Second, ship it.",
+    "expected": "What should we do next?\n1. Fix the bug.\n2. Ship it."
+  },
+  {
+    "name": "list: then a new paragraph",
+    "raw": "first fix the bug second ship it\n\nthanks everyone",
+    "expected": "1. Fix the bug.\n2. Ship it.\n\nThanks everyone."
+  },
+  {
+    "name": "list: filler words inside items",
+    "raw": "um so first uh we fix the login bug and second we like, update the docs",
+    "expected": "1. We fix the login bug.\n2. We update the docs."
+  },
+  {
+    "name": "bullets: bullet point cue",
+    "raw": "bullet point buy milk bullet point get eggs",
+    "expected": "* Buy milk.\n* Get eggs."
+  },
+  {
+    "name": "bullets: with intro",
+    "raw": "shopping list bullet point milk bullet point eggs",
+    "expected": "Shopping list:\n* Milk.\n* Eggs."
+  },
+  {
+    "name": "prose: single ordinal",
+    "raw": "I first went to the store and then went home",
+    "expected": "I first went to the store and then went home."
+  },
+  {
+    "name": "prose: wait a second / first draft",
+    "raw": "wait a second, I need to check the first draft",
+    "expected": "Wait a second, I need to check the first draft."
+  },
+  {
+    "name": "prose: at first / the second time",
+    "raw": "At first I didn't like it, but the second time it was great",
+    "expected": "At first I didn't like it, but the second time it was great."
+  },
+  {
+    "name": "prose: counting objects",
+    "raw": "I bought one apple, two oranges and three bananas",
+    "expected": "I bought one apple, two oranges and three bananas."
+  },
+  {
+    "name": "prose: on second thought",
+    "raw": "on second thought, let's go with the first option",
+    "expected": "On second thought, let's go with the first option."
+  },
+  {
+    "name": "prose: number at sentence end",
+    "raw": "The meeting is at 2. Then we have lunch.",
+    "expected": "The meeting is at 2. Then we have lunch."
+  },
+  {
+    "name": "prose: finally without a list",
+    "raw": "We finally shipped it. Next week we celebrate.",
+    "expected": "We finally shipped it. Next week we celebrate."
+  },
+  {
+    "name": "prose: 'first.second,third' punctuation quirk",
+    "raw": "first.second,third",
+    "expected": "First. Second, third."
+  },
+  {
+    "name": "list: 'then' before the next cue",
+    "raw": "first I need coffee then second I check email and lastly I go to the gym",
+    "expected": "1. I need coffee.\n2. I check email.\n3. I go to the gym."
+  },
+  {
+    "name": "list: 'okay so' lead-in dropped",
+    "raw": "okay so first we fix the bug and then second we ship",
+    "expected": "1. We fix the bug.\n2. We ship."
+  },
+  {
+    "name": "list: labelled digits",
+    "raw": "Step 1, open the app. Step 2, log in.",
+    "expected": "1. Open the app.\n2. Log in."
+  },
+  {
+    "name": "prose: first thing tomorrow",
+    "raw": "first thing tomorrow, call Sam. Second, email the team.",
+    "expected": "First thing tomorrow, call Sam. Second, email the team."
+  },
+  {
+    "name": "prose: the first step / the second step",
+    "raw": "The first step is to open settings and the second step is to add a word",
+    "expected": "The first step is to open settings and the second step is to add a word."
+  },
+  {
+    "name": "prose: counting out loud",
+    "raw": "one, two, three, four",
+    "expected": "One, two, three, four."
+  },
+  {
+    "name": "prose: number one priority",
+    "raw": "Number one priority is speed",
+    "expected": "Number one priority is speed."
+  }
 ]

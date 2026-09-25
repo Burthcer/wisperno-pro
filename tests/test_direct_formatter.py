@@ -33,7 +33,7 @@ def test_numbered_list_detection() -> None:
     result = format_direct("we need three things first buy milk second get eggs third go home")
     logger.info(f"-> {result!r}")
     lines = result.split("\n")
-    assert lines == ["1. Buy milk.", "2. Get eggs.", "3. Go home."], result
+    assert lines == ["We need three things:", "1. Buy milk.", "2. Get eggs.", "3. Go home."], result
     logger.success(f"PASS: 3-line numbered list -> {lines}")
 
 
