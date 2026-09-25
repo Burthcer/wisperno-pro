@@ -48,6 +48,11 @@ def _build_transform_hotkeys(db) -> Dict[str, str]:
 # session, let alone the hours a user waited before reporting this.
 INIT_TIMEOUT_SEC = 45.0
 
+# A dictation whose mic hasn't delivered any audio this long after the key
+# press is cancelled with a visible "Microphone didn't start" instead of
+# silently recording nothing.
+MIC_START_TIMEOUT_MS = 2000
+
 
 class WispernoEngine(QObject):
     state_changed = Signal(str)       # 'loading' | 'idle' | 'recording' | 'processing' | 'typing' | 'success' |
@@ -211,6 +216,7 @@ class WispernoEngine(QObject):
             self.audio_worker = AudioWorker(self.config.audio)
             self.audio_worker.level_changed.connect(self.level_changed)
             self.audio_worker.auto_silence_triggered.connect(self._on_auto_silence)
+            self.audio_worker.mic_live.connect(self._on_mic_live)
 
             logger.info("Initializing Win32 text injector...")
             self.injector = TextInjector(config=self.config.injector)
@@ -335,10 +341,47 @@ class WispernoEngine(QObject):
         # never happens.
         badge = "DIRECT" if not self.config.auto_llm_polish else self.active_mode.upper()
         logger.info(f"[RECORDING STARTED] (Mode: {badge})...")
-        self.state_changed.emit(f"recording:{badge}")
+        self._begin_recording(badge)
+
+    def _begin_recording(self, badge: Optional[str]) -> None:
+        """Open the mic for one dictation. The pill says "Opening mic..." until
+        the first real audio arrives (_on_mic_live), and only then switches to
+        "Listening..." - so it never claims to be recording before it is. The
+        mic is opened here and closed on release; it is never kept open."""
+        self._recording_badge = badge
+        self._recording_token = getattr(self, "_recording_token", 0) + 1
+        token = self._recording_token
+        self.state_changed.emit(self._with_badge("mic_starting"))
         if self.config.audio_cues_enabled:
             audio_cues.play_start_cue()
-        self.audio_worker.start_recording()
+        if not self.audio_worker.start_recording():
+            self._on_mic_failed("the microphone could not be opened")
+            return
+        QTimer.singleShot(MIC_START_TIMEOUT_MS, lambda: self._check_mic_started(token))
+
+    def _with_badge(self, state: str) -> str:
+        badge = getattr(self, "_recording_badge", None)
+        return f"{state}:{badge}" if badge else state
+
+    def _on_mic_live(self) -> None:
+        """First real audio of this recording arrived (AudioWorker.mic_live)."""
+        if self.audio_worker.recorder.is_recording and not self._is_releasing():
+            self.state_changed.emit(self._with_badge("recording"))
+
+    def _check_mic_started(self, token: int) -> None:
+        if token != self._recording_token:
+            return  # a later recording owns the mic now
+        recorder = self.audio_worker.recorder
+        if recorder.is_recording and not recorder.mic_live and not self._is_releasing():
+            self.audio_worker.stop_recording()
+            self._on_mic_failed(f"no audio arrived from the microphone within {MIC_START_TIMEOUT_MS / 1000:.0f}s")
+
+    def _on_mic_failed(self, reason: str) -> None:
+        logger.error(f"[MIC] {reason} - dictation cancelled. Check the microphone in Settings -> General.")
+        self._active_transform_id = None
+        if self.hotkey_worker:
+            self.hotkey_worker.manager.force_stop_active_recording()
+        self.state_changed.emit("mic_error")
 
     def _on_ptt_release(self) -> None:
         if not self._engines_ready or self._is_releasing():
@@ -409,10 +452,7 @@ class WispernoEngine(QObject):
         self._active_transform_id = transform_id
         self._ptt_press_time = time.perf_counter()
         logger.info(f"[RECORDING STARTED] (Transform: {transform_id.upper()})...")
-        self.state_changed.emit("recording")
-        if self.config.audio_cues_enabled:
-            audio_cues.play_start_cue()
-        self.audio_worker.start_recording()
+        self._begin_recording(None)
 
     def _on_transform_release(self, transform_id: str) -> None:
         """

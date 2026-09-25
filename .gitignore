@@ -74,3 +74,4 @@ desktop.ini
 # and must not be picked up by a future automated intake round.
 assets/screenshots/Screenshot *.png
 assets/screenshots/new assets/
+tests/screenshots/

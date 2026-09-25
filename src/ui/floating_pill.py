@@ -31,6 +31,10 @@ STATE_FALLBACK_WARNING = "fallback_warning"
 STATE_CPU_MODE = "cpu_mode"
 STATE_NO_SELECTION = "no_selection"
 STATE_ENGINE_FALLBACK = "engine_fallback"
+# Key pressed, mic still opening - "wait". Becomes STATE_RECORDING ("speak
+# now") only once real audio arrives from the device.
+STATE_MIC_STARTING = "mic_starting"
+STATE_MIC_ERROR = "mic_error"
 
 DORMANT_W = 220
 RECORDING_W = 320
@@ -43,6 +47,7 @@ FALLBACK_WARNING_W = 320
 CPU_MODE_W = 360
 NO_SELECTION_W = 300
 ENGINE_FALLBACK_W = 380
+MIC_ERROR_W = 340
 PILL_H = 34  # compact profile: half-height capsule radius (17px), 8px/4px h/v padding
 BOTTOM_OFFSET = 110
 
@@ -124,7 +129,7 @@ class FloatingPill(QWidget):
             self.resize(int(self._width_current), PILL_H)
             self._reposition()
 
-        if self.state in (STATE_RECORDING, STATE_TYPING):
+        if self.state in (STATE_RECORDING, STATE_TYPING, STATE_MIC_STARTING):
             self._pulse_phase += 0.12
         elif self.state in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
             self._progress_phase = (self._progress_phase + 0.02) % 1.0
@@ -155,6 +160,11 @@ class FloatingPill(QWidget):
             self._width_target = self._idle_width()
         elif state == STATE_LOADING:
             self._width_target = DORMANT_W
+        elif state == STATE_MIC_STARTING:
+            self._width_target = RECORDING_W  # same size as Listening, so going live doesn't jump
+        elif state == STATE_MIC_ERROR:
+            self._width_target = MIC_ERROR_W
+            self._collapse_timer.start(3000)
         elif state == STATE_RECORDING:
             self._recording_start = time.time()
             self._levels = [0.0, 0.0, 0.0, 0.0]
@@ -249,6 +259,10 @@ class FloatingPill(QWidget):
     def _colors_for_state(self):
         if self.state == STATE_RECORDING:
             return "#1E1216", theme.ACCENT_RECORDING
+        if self.state == STATE_MIC_STARTING:
+            return theme.PILL_BG, theme.TEXT_SECONDARY
+        if self.state == STATE_MIC_ERROR:
+            return "#1F160C", theme.ACCENT_ERROR
         if self.state == STATE_PROCESSING:
             return "#15121F", theme.ACCENT_PROCESSING
         if self.state == STATE_TYPING:
@@ -293,6 +307,19 @@ class FloatingPill(QWidget):
                 self._paint_close_button(painter, w, h)
             else:
                 self._close_btn_rect = QRectF()
+            return
+
+        if self.state == STATE_MIC_STARTING:
+            self._paint_dot(painter, m, cy, theme.TEXT_SECONDARY)  # grey: not capturing yet
+            painter.setPen(QColor(theme.PILL_TEXT))
+            painter.drawText(QRectF(m + 16, 0, 150, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "Opening mic...")
+            self._paint_mode_badge(painter, w, cy, m)
+            return
+
+        if self.state == STATE_MIC_ERROR:
+            painter.setPen(QColor(theme.ACCENT_ERROR))
+            painter.setFont(QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold))
+            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "⚠ Microphone didn't start - check Settings")
             return
 
         if self.state == STATE_RECORDING:

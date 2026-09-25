@@ -33,6 +33,7 @@ class AudioRecorder:
     def __init__(
         self, config: Optional[AudioConfig] = None, level_callback: Optional[Callable[[float], None]] = None,
         silence_callback: Optional[Callable[[], None]] = None,
+        started_callback: Optional[Callable[[], None]] = None,
     ):
         self.config = config or AudioConfig()
         self.target_sample_rate = self.config.sample_rate  # 16000 Hz expected by Whisper
@@ -46,6 +47,12 @@ class AudioRecorder:
         # (not baked into a closure) so Settings can change it live.
         self.auto_silence_seconds = self.config.auto_silence_seconds
         self.silence_callback = silence_callback
+        # Fired once per recording, when the first block of real audio arrives
+        # from the device - the moment the mic is actually capturing, which is
+        # what the pill's "Listening..." should mean (opening the stream takes
+        # a noticeable moment, and anything said before this is lost).
+        self.started_callback = started_callback
+        self._mic_live = False
         self._last_speech_time: float = 0.0
         self._silence_fired = False
         # Adaptive noise floor: a room's steady ambient noise (fan whine, mic
@@ -108,6 +115,13 @@ class AudioRecorder:
             logger.warning(f"Audio stream status flag: {status}")
         if self._is_recording:
             self._audio_queue.put(indata.copy())
+            if not self._mic_live:
+                self._mic_live = True
+                if self.started_callback:
+                    try:
+                        self.started_callback()
+                    except Exception:
+                        pass
             rms = float(np.sqrt(np.mean(np.square(indata))))
             if self.level_callback:
                 try:
@@ -168,6 +182,7 @@ class AudioRecorder:
                     break
 
             try:
+                self._mic_live = False
                 self._is_recording = True
                 self._start_time = time.perf_counter()
                 self._last_speech_time = time.monotonic()
@@ -310,3 +325,8 @@ class AudioRecorder:
     @property
     def is_recording(self) -> bool:
         return self._is_recording
+
+    @property
+    def mic_live(self) -> bool:
+        """True once this recording has received real audio from the device."""
+        return self._mic_live

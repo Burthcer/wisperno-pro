@@ -47,12 +47,14 @@ class AudioWorker(QObject):
 
     level_changed = Signal(float)
     auto_silence_triggered = Signal()
+    mic_live = Signal()  # first real audio of this recording arrived - safe to speak now
 
     def __init__(self, config, parent: Optional[QObject] = None):
         super().__init__(parent)
         self.recorder = AudioRecorder(
             config=config, level_callback=self.level_changed.emit,
             silence_callback=self.auto_silence_triggered.emit,
+            started_callback=self.mic_live.emit,
         )
 
     def start_recording(self) -> bool:
