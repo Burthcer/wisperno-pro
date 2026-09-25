@@ -350,7 +350,31 @@ class _GeneralSettings(QWidget):
         self.auto_copy_cb.stateChanged.connect(lambda s: engine.set_auto_copy_to_clipboard(s != 0))
         layout.addWidget(self.auto_copy_cb)
 
+        # --- Testing ---
+        layout.addWidget(_label_title("Testing"))
+        self.save_recordings_cb = QCheckBox("Save Recordings for Testing (stores your dictation audio on this PC)")
+        self.save_recordings_cb.setToolTip(
+            "Keeps each dictation's audio and transcript so scripts/eval_dictation.py can measure accuracy "
+            "and speed on your own voice. Nothing leaves this machine. Leave off for normal use."
+        )
+        self.save_recordings_cb.setChecked(engine.config.save_recordings_for_testing)
+        self.save_recordings_cb.stateChanged.connect(lambda s: engine.set_save_recordings_for_testing(s != 0))
+        layout.addWidget(self.save_recordings_cb)
+        open_recordings_btn = QPushButton("Open Recordings Folder")
+        open_recordings_btn.clicked.connect(self._open_recordings_folder)
+        layout.addWidget(open_recordings_btn, alignment=Qt.AlignLeft)
+
         layout.addStretch()
+
+    def _open_recordings_folder(self) -> None:
+        import os
+        from src.test_recordings import recordings_dir
+
+        folder = recordings_dir()
+        if hasattr(os, "startfile"):
+            os.startfile(folder)  # Windows Explorer
+        else:
+            QMessageBox.information(self, "Wisperno", f"Recordings folder:\n{folder}")
 
     def _on_device_changed(self, _index: int) -> None:
         self.engine.set_audio_device(self.selected_device_index())

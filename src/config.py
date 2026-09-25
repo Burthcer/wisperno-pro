@@ -190,6 +190,12 @@ class AppConfig(BaseModel):
     minimize_to_tray: bool = Field(default=True, description="Closing the dashboard/pill minimizes to tray instead of quitting")
     pill_always_on_top: bool = Field(default=True, description="Keep the floating pill above other windows, including fullscreen apps/games")
     audio_cues_enabled: bool = Field(default=False, description="Play a short tone when dictation starts and stops")
+    save_recordings_for_testing: bool = Field(
+        default=False,
+        description="Save each dictation's audio + transcripts to %APPDATA%\\Wisperno\\recordings for "
+                    "building a personal test set (scripts/eval_dictation.py). Off by default - audio only "
+                    "touches disk while this is on.",
+    )
     db_retention_policy: str = Field(default="never", description="History auto-prune window: '3_months', '6_months', '1_year', or 'never'")
     active_mode: str = Field(default="polish", description="Active transformation mode ('polish', 'prompt_engineer', 'bullets', 'raw')")
     dictionary_path: str = Field(default="config/dictionary.json", description="Custom word-replacement dictionary path")

@@ -322,6 +322,7 @@ class WispernoEngine(QObject):
             audio_array, self.transcriber, self.transformer, self.injector, self.db,
             snippets, self.active_mode, record_duration_ms,
             use_direct_formatter=not self.config.auto_llm_polish,
+            save_recording=self.config.save_recordings_for_testing,
         )
         worker.state_changed.connect(self.state_changed)
         worker.result_ready.connect(self.history_added)
@@ -400,6 +401,7 @@ class WispernoEngine(QObject):
                 audio_array, self.transcriber, self.transformer, self.injector, self.db,
                 snippets, transform_id, record_duration_ms, system_prompt=transform["system_prompt"],
                 status_label=transform["title"],
+                save_recording=self.config.save_recordings_for_testing,
             )
         else:
             logger.info(f"[TRANSFORM] No speech captured for '{transform_id}' - trying selected text instead.")
@@ -639,6 +641,10 @@ class WispernoEngine(QObject):
 
     def set_audio_cues_enabled(self, enabled: bool) -> None:
         self.config.audio_cues_enabled = enabled
+        self.save_config()
+
+    def set_save_recordings_for_testing(self, enabled: bool) -> None:
+        self.config.save_recordings_for_testing = enabled
         self.save_config()
 
     def set_auto_copy_to_clipboard(self, enabled: bool) -> None:

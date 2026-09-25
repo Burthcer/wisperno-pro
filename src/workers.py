@@ -140,7 +140,7 @@ class InferenceWorker(QThread):
         self, audio_array, transcriber, transformer, injector, db, snippets,
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
-        parent: Optional[QObject] = None,
+        save_recording: bool = False, parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -164,6 +164,8 @@ class InferenceWorker(QThread):
         # `auto_llm_polish` config toggle, only for the main dictation hotkey
         # (never for a Transforms-hub hotkey, which is an explicit LLM gesture).
         self.use_direct_formatter = use_direct_formatter
+        # Settings -> General -> "Save Recordings for Testing" (off by default).
+        self.save_recording = save_recording
 
     def run(self) -> None:
         try:
@@ -230,6 +232,14 @@ class InferenceWorker(QThread):
             # warning pill unless something actually broke" instruction.
             # [FALLBACK_DEBUG] in the log is where a soft fallback stays visible.
             self.state_changed.emit("success" if injected else "idle")
+
+            # After the paste, so it never adds latency to the dictation itself.
+            if self.save_recording:
+                try:
+                    from src.test_recordings import save_recording
+                    save_recording(self.audio_array, raw_text, final_text)
+                except Exception as e:
+                    logger.warning(f"Could not save test recording: {e}")
 
         except Exception as e:
             logger.error(f"InferenceWorker pipeline error: {e}", exc_info=True)
