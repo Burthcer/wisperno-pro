@@ -1,0 +1,21 @@
+{
+  "dictionary": ["pull request", "Kubernetes", "PyTorch", "Supabase", "Wisperno", "Nguyen", "Siobhan", "Svelte", "Vercel", "Tauri", "GraphQL", "Postgres", "kubectl", "Anthropic", "Jira", "OAuth"],
+  "cases": [
+    {"id": "v01", "voice": "lessac", "say": "Please review the pull request before lunch.", "terms": ["pull request"]},
+    {"id": "v02", "voice": "ryan", "say": "We are moving the whole cluster to Kubernetes next month.", "terms": ["Kubernetes"]},
+    {"id": "v03", "voice": "amy", "say": "The model was trained in PyTorch on a single GPU.", "terms": ["PyTorch"]},
+    {"id": "v04", "voice": "alan", "say": "Store the user profiles in Supabase for now.", "terms": ["Supabase"]},
+    {"id": "v05", "voice": "lessac", "say": "Wisperno transcribes everything locally on my laptop.", "terms": ["Wisperno"]},
+    {"id": "v06", "voice": "ryan", "say": "Can you forward this to Nguyen and Siobhan?", "terms": ["Nguyen", "Siobhan"]},
+    {"id": "v07", "voice": "amy", "say": "The dashboard is written in Svelte and deployed on Vercel.", "terms": ["Svelte", "Vercel"]},
+    {"id": "v08", "voice": "alan", "say": "The desktop app is built with Tauri instead of Electron.", "terms": ["Tauri"]},
+    {"id": "v09", "voice": "lessac", "say": "Our GraphQL server talks to Postgres through a connection pool.", "terms": ["GraphQL", "Postgres"]},
+    {"id": "v10", "voice": "ryan", "say": "Run kubectl get pods to see what is running.", "terms": ["kubectl"]},
+    {"id": "v11", "voice": "amy", "say": "I read the Anthropic paper on interpretability last night.", "terms": ["Anthropic"]},
+    {"id": "v12", "voice": "alan", "say": "Create a Jira ticket for the OAuth login bug.", "terms": ["Jira", "OAuth"]},
+    {"id": "v13", "voice": "ryan", "say": "Merge the pull request once the tests pass.", "terms": ["pull request"]},
+    {"id": "v14", "voice": "lessac", "say": "Siobhan said the Postgres migration is done.", "terms": ["Siobhan", "Postgres"]},
+    {"id": "v15", "voice": "amy", "say": "Nguyen will set up Kubernetes for the staging cluster.", "terms": ["Nguyen", "Kubernetes"]},
+    {"id": "v16", "voice": "alan", "say": "Ask Wisperno to format this as a list.", "terms": ["Wisperno"]}
+  ]
+}

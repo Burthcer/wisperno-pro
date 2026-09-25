@@ -43,6 +43,7 @@ CHUNK_MIN_SILENCE_MS = 300
 # initial_prompt context for the next chunk, so a sentence split across a
 # chunk boundary still reads coherently instead of two disconnected halves.
 CHUNK_CONTEXT_WORDS = 15
+CHUNK_CONTEXT_TOKENS = 30  # prompt room reserved for those words
 # Wispr Flow-style paragraph breaks: a mid-dictation pause at least this long
 # between two Whisper segments starts a new paragraph ("\n\n") instead of
 # just continuing the sentence with a space - the natural-pause range a user
@@ -171,11 +172,11 @@ class Transcriber:
             return ""
 
         t0 = time.perf_counter()
-        biased_prompt = self.vocabulary.build_initial_prompt(self.config.initial_prompt)
-
         chunks = self._chunk_boundaries(audio_array)
+        # Long recordings append the previous chunk's last words to the prompt - leave room for them.
+        biased_prompt, hotwords = self._whisper_bias(reserve_tokens=CHUNK_CONTEXT_TOKENS if len(chunks) > 1 else 0)
         if len(chunks) <= 1:
-            full_text = self._transcribe_one_pass(audio_array, biased_prompt)
+            full_text = self._transcribe_one_pass(audio_array, biased_prompt, hotwords)
         else:
             logger.info(
                 f"Long recording ({len(audio_array)/16000:.1f}s) - splitting into {len(chunks)} "
@@ -191,7 +192,7 @@ class Transcriber:
                 # prompt continuity to bridge the cut.
                 context_words = " ".join(pieces[-1].split()[-CHUNK_CONTEXT_WORDS:]) if pieces else ""
                 chunk_prompt = f"{biased_prompt} {context_words}".strip() if context_words else biased_prompt
-                chunk_text = self._transcribe_one_pass(audio_array[start:end], chunk_prompt)
+                chunk_text = self._transcribe_one_pass(audio_array[start:end], chunk_prompt, hotwords)
                 if chunk_text:
                     pieces.append(chunk_text)
             full_text = " ".join(pieces).strip()
@@ -200,7 +201,20 @@ class Transcriber:
         logger.info(f"Transcribed {len(audio_array)/16000:.2f}s audio -> '{full_text}' [{elapsed_ms:.1f}ms]")
         return full_text
 
-    def _transcribe_one_pass(self, audio_array: np.ndarray, biased_prompt: str) -> str:
+    def _whisper_bias(self, reserve_tokens: int = 0):
+        """(initial_prompt, hotwords) for the user's dictionary - see Vocabulary.build_whisper_bias."""
+        return self.vocabulary.build_whisper_bias(self.config.initial_prompt, self._count_tokens, reserve_tokens)
+
+    def _count_tokens(self, text: str) -> int:
+        tokenizer = getattr(self.model, "hf_tokenizer", None)
+        if tokenizer is not None:
+            try:
+                return len(tokenizer.encode(" " + text).ids)
+            except Exception:
+                pass
+        return max(1, len(text) // 3)  # conservative: names/jargon tokenize at ~3 chars a token
+
+    def _transcribe_one_pass(self, audio_array: np.ndarray, biased_prompt: str, hotwords: Optional[str] = None) -> str:
         """One chunk (already known to fit comfortably inside Whisper's native window) through
         the model, with the existing no-VAD retry safety net for a quiet/short/oddly-mic'd chunk
         VAD misjudges as silent."""
@@ -211,18 +225,20 @@ class Transcriber:
             "speech_pad_ms": self.config.vad_speech_pad_ms,
         } if self.config.vad_filter else None
 
-        text, info = self._run_transcription(audio_array, biased_prompt, vad_filter=self.config.vad_filter, vad_params=vad_params)
+        text, info = self._run_transcription(
+            audio_array, biased_prompt, vad_filter=self.config.vad_filter, vad_params=vad_params, hotwords=hotwords,
+        )
         no_speech = self.config.vad_filter and getattr(info, "duration_after_vad", 1.0) < NO_SPEECH_VAD_SEC
         if not text:
             logger.warning("Transcription was empty after VAD filtering - retrying without VAD before giving up.")
-            text, _info = self._run_transcription(audio_array, biased_prompt, vad_filter=False, vad_params=None)
+            text, _info = self._run_transcription(audio_array, biased_prompt, vad_filter=False, vad_params=None, hotwords=hotwords)
             no_speech = True  # VAD found nothing: the retry is exactly when Whisper invents text
 
         text = drop_prompt_leak(text, biased_prompt)
         if no_speech and text and is_no_speech_hallucination(text, biased_prompt):
             logger.info(f"Dropped likely Whisper hallucination on near-silent audio: {text!r}")
             return ""
-        return self.vocabulary.apply_replacements(text.strip())
+        return self.vocabulary.correct_sound_alikes(self.vocabulary.apply_replacements(text.strip()))
 
     def transcribe_live_window(self, audio_array: np.ndarray, context: Optional[str] = None) -> List[dict]:
         """
@@ -254,7 +270,7 @@ class Transcriber:
         """
         if audio_array is None or len(audio_array) == 0:
             return []
-        biased_prompt = self.vocabulary.build_initial_prompt(self.config.initial_prompt)
+        biased_prompt, hotwords = self._whisper_bias(reserve_tokens=CHUNK_CONTEXT_TOKENS if context else 0)
         prompt = f"{biased_prompt} {context}".strip() if context else biased_prompt
         segments, _info = self.model.transcribe(
             audio_array,
@@ -264,6 +280,7 @@ class Transcriber:
             word_timestamps=True,
             vad_filter=False,
             initial_prompt=prompt,
+            hotwords=hotwords,
             language=self.config.language,
             condition_on_previous_text=False,
             compression_ratio_threshold=2.4,
@@ -318,7 +335,7 @@ class Transcriber:
 
     def _run_transcription(
         self, audio_array: np.ndarray, biased_prompt: str, vad_filter: bool, vad_params: Optional[dict],
-        condition_on_previous_text: bool = False,
+        condition_on_previous_text: bool = False, hotwords: Optional[str] = None,
     ):
         """One Whisper pass; consumes the full segment generator, never just the first segment.
         The three threshold kwargs below are faster-whisper's OWN default values
@@ -343,6 +360,7 @@ class Transcriber:
             vad_filter=vad_filter,
             vad_parameters=vad_params,
             initial_prompt=biased_prompt,
+            hotwords=hotwords,
             language=self.config.language,  # pinned to 'en' by default; null = auto-detect
             condition_on_previous_text=condition_on_previous_text,
             compression_ratio_threshold=2.4,  # reject a segment that's too repetitive to be real speech

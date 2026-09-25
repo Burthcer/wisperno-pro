@@ -85,3 +85,23 @@ sees the text; "scratch that" is applied in code; and three new guardrails
 the instant formatter. End to end on the audio clips, Turbo scores 97%
 against 96% for the instant formatter alone; short, already-clean
 dictations skip the LLM entirely.
+
+## Custom dictionary (measured 2026-09-25)
+
+16 clips full of names and jargon (`tests/fixtures/vocab_cases.json`: Supabase,
+Vercel, Nguyen, Siobhan, kubectl, OAuth, ...), real Whisper large-v3-turbo,
+run through the app's own transcriber with and without those 16 words in
+the dictionary:
+
+| | No dictionary | With dictionary |
+|---|---|---|
+| Word error rate, jargon clips | 7.19% | **2.16%** |
+| Terms spelled exactly right | 13/22 | **21/22** (only "kubectl" missed) |
+| Word error rate, the 24 general clips | 1.79% | 1.19% (no harm; "pull request" fixed) |
+
+How: dictionary words go into Whisper's prompt first and spill into its
+separate hotwords slot when the prompt is full (together roughly 60 words;
+newest first beyond that - an 86-word dictionary crammed into the prompt
+alone fell to 16/22), and a sound-alike pass snaps near-misses Whisper
+writes as names ("Superbase" -> Supabase, "Versil" -> Vercel, "NuYen" ->
+Nguyen) - zero changes across ~200 unrelated transcripts.

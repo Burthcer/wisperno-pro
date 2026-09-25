@@ -55,8 +55,9 @@ class DictionaryTab(QWidget):
         layout.setContentsMargins(28, 22, 28, 22)
         layout.addWidget(_label_title("Custom Vocabulary & Dictionary"))
         layout.addWidget(QLabel(
-            f'<span style="color:{theme.TEXT_SECONDARY}">Phonetic corrections and jargon Whisper '
-            "should recognize and auto-replace.</span>"
+            f'<span style="color:{theme.TEXT_SECONDARY}">Names, products and jargon you use. Add just the word '
+            "and Wisperno will listen for it and spell it your way; if Whisper keeps mishearing it the same "
+            "way, add that too.</span>"
         ))
 
         top_bar = QHBoxLayout()
@@ -66,7 +67,7 @@ class DictionaryTab(QWidget):
         layout.addLayout(top_bar)
 
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["SPOKEN", "REPLACEMENT", "CATEGORY", "ACTIONS"])
+        self.table.setHorizontalHeaderLabels(["WORD", "ALSO FIXES", "CATEGORY", "ACTIONS"])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -94,8 +95,10 @@ class DictionaryTab(QWidget):
         form_card.setStyleSheet(f"background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px;")
         form = QHBoxLayout(form_card)
         form.setContentsMargins(12, 12, 12, 12)
-        self.word_in = QLineEdit(placeholderText='Spoken (e.g. "pie torch")')
-        self.repl_in = QLineEdit(placeholderText="Replacement (e.g. PyTorch)")
+        # The word itself is what matters (it's what Whisper is told to listen
+        # for); "heard as" is only for a consistent mishearing to rewrite.
+        self.repl_in = QLineEdit(placeholderText="Word or name (e.g. PyTorch)")
+        self.word_in = QLineEdit(placeholderText='Often heard as (optional, e.g. "pie torch")')
         self.case_cb = QCheckBox("Case-sensitive")
         self.category_cb = QComboBox()
         self.category_cb.wheelEvent = lambda event: event.ignore()  # scrolling the page must not silently change the selected category
@@ -103,7 +106,9 @@ class DictionaryTab(QWidget):
         self.add_btn = QPushButton("+ Add Word")
         self.add_btn.setObjectName("primary")
         self.add_btn.clicked.connect(self._add)
-        for w in (self.word_in, self.repl_in, self.case_cb, self.category_cb, self.add_btn):
+        self.repl_in.returnPressed.connect(self._add)
+        self.word_in.returnPressed.connect(self._add)
+        for w in (self.repl_in, self.word_in, self.case_cb, self.category_cb, self.add_btn):
             form.addWidget(w)
         layout.addWidget(form_card, 0)  # fixed dock: never grows/shrinks, always visible
 
@@ -121,12 +126,14 @@ class DictionaryTab(QWidget):
         self.table.setRowCount(len(entries))
         mono_font = QFont(theme.FONT_FAMILY_MONO)
         for i, e in enumerate(entries):
-            spoken_item = QTableWidgetItem(e["word"])
-            spoken_item.setFont(mono_font)
-            self.table.setItem(i, 0, spoken_item)
-            repl_item = QTableWidgetItem(f'→ {e["replacement"]}')
-            repl_item.setForeground(QColor(theme.TEXT_PRIMARY))
-            self.table.setItem(i, 1, repl_item)
+            word_item = QTableWidgetItem(e["replacement"])
+            word_item.setForeground(QColor(theme.TEXT_PRIMARY))
+            self.table.setItem(i, 0, word_item)
+            heard_as = e["word"] if e["word"].lower() != e["replacement"].lower() else ""
+            heard_item = QTableWidgetItem(f'"{heard_as}" → {e["replacement"]}' if heard_as else "—")
+            heard_item.setFont(mono_font)
+            heard_item.setForeground(QColor(theme.TEXT_SECONDARY))
+            self.table.setItem(i, 1, heard_item)
             self.table.setCellWidget(i, 2, _badge(e["category"]))
 
             actions = QWidget()
@@ -143,7 +150,8 @@ class DictionaryTab(QWidget):
     def _start_edit(self, entry: dict) -> None:
         """Loads the entry into the form for editing - saving re-adds it (word is the
         dictionary's natural key), so no separate update path is needed."""
-        self.word_in.setText(entry["word"])
+        same = entry["word"].lower() == entry["replacement"].lower()
+        self.word_in.setText("" if same else entry["word"])
         self.repl_in.setText(entry["replacement"])
         self.case_cb.setChecked(bool(entry["case_sensitive"]))
         idx = self.category_cb.findText(entry["category"])
@@ -153,8 +161,9 @@ class DictionaryTab(QWidget):
         self.add_btn.setText("Save Word")
 
     def _add(self) -> None:
-        word, repl = self.word_in.text().strip(), self.repl_in.text().strip()
-        if not word or not repl:
+        repl = self.repl_in.text().strip()
+        word = self.word_in.text().strip() or repl  # no "heard as": the word just maps to itself
+        if not repl:
             return
         if self._editing_id is not None:
             self.engine.vocabulary.remove_entry(self._editing_id)
