@@ -22,6 +22,7 @@ from src import audio_cues
 from src.__version__ import __version__
 from src.config import AppConfig, get_app_data_dir, get_base_dir, get_db_path, load_config, save_config
 from src.database import WispernoDB
+from src.presets import apply_preset, migrate_removed_preset
 from src.vocabulary import Vocabulary
 from src.workers import AudioWorker, HotkeyWorker, InferenceWorker, SelectionPolishWorker, WritingStylesWorker
 
@@ -84,7 +85,14 @@ class WispernoEngine(QObject):
         self._live_worker = None  # type: Optional["LiveTranscriptionWorker"]
         self._writing_styles_worker = None  # type: Optional["WritingStylesWorker"]
         self._writing_styles_selection = ""  # the raw text a chosen style gets saved against in history
-        self._beta_fallback_occurred = False  # set by _load_transformer_with_beta_fallback() this boot
+        # A config saved with a since-retired preset (Flagship/Eco/Gemma Beta -
+        # see src/presets.py) is moved to its replacement once, here, and
+        # the pill says so after the engines load.
+        migrated_to = migrate_removed_preset(self.config)
+        self._retired_preset_migrated = migrated_to is not None
+        if migrated_to:
+            logger.warning(f"Engine preset was retired - switched to '{migrated_to}' ({self.config.llm.filename}).")
+            self.save_config()
 
         db_path = get_db_path()
         self.db = WispernoDB(db_path)
@@ -132,10 +140,7 @@ class WispernoEngine(QObject):
             "falling back to the Standard preset for this launch instead of retrying the same config."
         )
         self.config.model_preset = "standard"
-        self.config.llm.repo_id = "bartowski/Qwen2.5-3B-Instruct-GGUF"
-        self.config.llm.filename = "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
-        self.config.llm.model_path = "models/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
-        self.config.llm.kv_cache_quantization = True
+        apply_preset(self.config.llm, "standard")
         try:
             save_config(self.config, self.config_path)
         except Exception as e:
@@ -186,6 +191,7 @@ class WispernoEngine(QObject):
             from src.injector import TextInjector
             from src.transcriber import Transcriber
             from src.transformer import Transformer
+            from src import system_monitor
 
             # Proactive hardware check, before either model is loaded: integrated
             # graphics or a VRAM-starved GPU can otherwise crash Whisper/llama.cpp's
@@ -208,11 +214,17 @@ class WispernoEngine(QObject):
             logger.info("Initializing Win32 text injector...")
             self.injector = TextInjector(config=self.config.injector)
 
+            system_monitor.mark_models_loading()
             logger.info("Initializing Whisper STT engine (this can take a while)...")
             self.transcriber = Transcriber(config=self.config.whisper, vocabulary=self.vocabulary)
 
             logger.info("Initializing local SLM transform engine...")
-            self.transformer = self._load_transformer_with_beta_fallback()
+            self.transformer = Transformer(
+                config=self.config.llm, prompts=self.config.prompts,
+                profanity_filter=self.config.profanity_filter,
+            )
+
+            system_monitor.mark_models_loaded()
 
             logger.info("Initializing Win32 GetAsyncKeyState hotkey manager...")
             transform_hotkeys = _build_transform_hotkeys(self.db)
@@ -246,7 +258,8 @@ class WispernoEngine(QObject):
             # back to idle on its own (see floating_pill.py's STATE_CPU_MODE) -
             # nothing in the app is blocked waiting on it being dismissed.
             self.state_changed.emit("cpu_mode")
-        if self._beta_fallback_occurred:
+        if self._retired_preset_migrated:
+            self._retired_preset_migrated = False  # once per migration, not on every later engine reload
             self.state_changed.emit("engine_fallback")
 
         triggers = []
@@ -261,59 +274,6 @@ class WispernoEngine(QObject):
         logger.success(f" Press [{self.config.settings_hotkey.upper()}] to open the dashboard.")
         logger.success(f" Initial Mode: [{self.active_mode.upper()}]")
         logger.success("=" * 70)
-
-    def _load_transformer_with_beta_fallback(self) -> "Transformer":
-        """
-        Constructs the Transformer for whatever preset is currently configured.
-        If that preset is the experimental 'gemma_beta' tier and it fails to
-        produce a usable LLM (bad GGUF, incompatible architecture, VRAM
-        overflow, or any other load-time exception), this reverts the LIVE
-        config back to Turbo Flagship, persists that reversion so the NEXT
-        launch doesn't repeat the same failed load, and retries construction
-        once. Only Python-level failures are catchable this way - a genuine
-        native crash inside llama.cpp's C code (an access violation, not a
-        raised exception) can still take the whole process down; this is a
-        real limit of wrapping a ctypes-bound native library in try/except,
-        not something a Python-side try/except can close.
-        """
-        from src.transformer import Transformer
-
-        try:
-            transformer = Transformer(
-                config=self.config.llm, prompts=self.config.prompts,
-                profanity_filter=self.config.profanity_filter,
-            )
-            load_failed = transformer.llm is None
-        except Exception as e:
-            logger.error(f"Transformer construction raised for preset '{self.config.model_preset}': {e}", exc_info=True)
-            transformer = None
-            load_failed = True
-
-        if not (load_failed and self.config.model_preset == "gemma_beta"):
-            return transformer
-
-        logger.error(
-            "Experimental 'Gemma 2 2B (Beta)' preset failed to load - reverting to Turbo Flagship "
-            "and persisting that reversion so the next launch doesn't retry the same failed config."
-        )
-        from src.ui.settings_tab import MODEL_PRESETS  # lazy: avoids engine.py importing the UI layer at module scope
-
-        turbo = MODEL_PRESETS["turbo"]
-        self.config.model_preset = "turbo"
-        self.config.llm.repo_id = turbo["repo_id"]
-        self.config.llm.filename = turbo["filename"]
-        self.config.llm.model_path = turbo["model_path"]
-        self.config.llm.kv_cache_quantization = turbo["kv_cache_quantization"]
-        self.config.llm.n_ctx = turbo["n_ctx"]
-        self.config.llm.flash_attn = turbo["flash_attn"]
-        self.config.llm.chat_style = turbo["chat_style"]
-        self.save_config()
-        self._beta_fallback_occurred = True
-
-        return Transformer(
-            config=self.config.llm, prompts=self.config.prompts,
-            profanity_filter=self.config.profanity_filter,
-        )
 
     # --- Pipeline --------------------------------------------------------------
 

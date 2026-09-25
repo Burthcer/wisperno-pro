@@ -209,8 +209,8 @@ class AppConfig(BaseModel):
     model_preset: str = Field(
         default="standard",
         description=(
-            "Selected Engine Preset key ('eco' | 'standard' | 'flagship' | 'turbo' - see "
-            "src/ui/settings_tab.py:MODEL_PRESETS). The llm.* fields below are the actual "
+            "Selected Engine Preset key ('turbo' | 'standard' - see "
+            "src/presets.py:MODEL_PRESETS). The llm.* fields below are the actual "
             "source of truth for what loads; this just remembers which named preset they "
             "came from so the Settings dropdown re-selects the right entry on next launch, "
             "rather than falling back to matching llm.model_path against the presets table."

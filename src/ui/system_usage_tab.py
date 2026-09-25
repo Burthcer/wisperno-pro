@@ -150,8 +150,13 @@ class SystemUsageTab(QWidget):
         if gpu_total_gb > 0:
             pct = int(gpu_used_gb / gpu_total_gb * 100)
             self.vram_bar.setValue(pct)
+            wisperno_txt = f"Wisperno: {app_vram_gb:.1f} GB"
+            if snap["app_vram_source"] != "per-process counter":
+                wisperno_txt += " (est.)"
+            if snap["app_shared_mb"] >= 100:
+                wisperno_txt += f" + {snap['app_shared_mb'] / 1024:.1f} GB moved to system RAM"
             self.vram_label.setText(
-                f"Wisperno: {app_vram_gb:.1f} GB  |  Total VRAM: {gpu_used_gb:.1f} / {gpu_total_gb:.1f} GB ({pct}%)"
+                f"{wisperno_txt}  |  Total VRAM: {gpu_used_gb:.1f} / {gpu_total_gb:.1f} GB ({pct}%)"
             )
             util_txt = f"{snap['gpu_util_pct']}%" if snap["gpu_util_pct"] is not None else "n/a"
             temp_txt = f"{snap['gpu_temp_c']}°C" if snap["gpu_temp_c"] is not None else "n/a"

@@ -15,14 +15,11 @@ and `handoff.md`), not estimated:
 | Preset | Measured VRAM | Minimum GPU VRAM to run comfortably |
 |---|---|---|
 | Turbo Flagship (default) | ~3.5 GB | 4GB |
-| Eco | ~3.6 GB | 4GB |
 | Standard | ~3.7 GB | 4GB |
-| Flagship | ~5.1 GB | 6GB |
 
 | VRAM available | Recommended preset |
 |---|---|
-| 6GB+ | Any preset, including Flagship |
-| 4-5GB | Turbo Flagship, Eco, or Standard (default: Turbo Flagship) |
+| 4GB+ | Turbo Flagship (default) or Standard |
 | 2-3GB | Turbo Flagship only, minimal headroom - close other GPU apps |
 | < 2GB / no CUDA GPU | CPU-compatibility fallback (automatic) - see below |
 

@@ -412,7 +412,7 @@ class FloatingPill(QWidget):
             painter.setFont(bold)
             self._draw_balanced_text(
                 painter, QRectF(m, 0, w - 2 * m, h),
-                "⚠ Experimental preset failed to load. Reverted to Turbo Flagship.",
+                "⚠ Old engine preset retired - switched to a supported one.",
             )
             return
 

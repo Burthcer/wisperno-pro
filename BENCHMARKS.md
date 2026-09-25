@@ -4,15 +4,15 @@ Measured directly on the dev machine (RTX-class NVIDIA GPU, CUDA) via
 `tests/benchmark_models.py`, not estimated. Whisper `large-v3-turbo`
 (int8_float16) loaded throughout, matching the real app's combined VRAM
 footprint. Last measured 2026-09-09 against `llama-cpp-python==0.3.26`.
+The VRAM column is whole-GPU memory in use (pynvml), so it also includes
+Windows and any other app on the GPU, not just Wisperno.
 
 | Preset | VRAM | Process RAM | Avg decode speed | 100-word latency | Fidelity |
 |---|---|---|---|---|---|
 | **Turbo Flagship (default)** | 3491 MB | 2311 MB | **113.8 tok/s** | 0.82s | 97.6% |
-| Eco (IQ4_XS) | 3621 MB | 2319 MB | 103.3 tok/s | 0.89s | 97.6% |
 | Standard (Q4_K_M, 3B) | 3691 MB | 2559 MB | 91.7 tok/s | 1.04s | 98.8% |
-| Flagship (Q8_0, 3B, full-precision KV) | 5119 MB | 3871 MB | 63.1 tok/s | 1.48s | 98.8% |
 
-"Fidelity" on Turbo/Eco is measured on raw model output and bypasses the
+"Fidelity" on Turbo is measured on raw model output and bypasses the
 app's own guardrail (`sanity_check()`) by design - real usage always goes
 through it, which is why the conversational-trap suite (adversarial prompts
 designed to make the model answer back instead of cleaning dictation) still
@@ -41,6 +41,10 @@ From a full source checkout (not this portable download - see INSTALL.md's
 python tests/benchmark_models.py
 ```
 
-Requires all four preset model files present in `models/` (Turbo and Eco/
-Standard/Flagship's weights are not all bundled in the same distribution -
-see `models/MODELS.md` in this folder for where to get each one).
+Requires both preset model files present in `models/` - see
+`models/MODELS.md` for where to get each one.
+
+The Flagship (Qwen2.5-3B Q8_0, ~5.1GB), Eco (Qwen2.5-3B IQ4_XS) and Gemma 2
+2B (Beta) presets were retired: Flagship went over the 4GB target for no
+fidelity gain over Standard, Eco matched Standard with no advantage, and
+Gemma was slower than Turbo. See `src/presets.py`.

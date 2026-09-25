@@ -84,7 +84,7 @@ CONVERSATIONAL_LEAKS = [
 
 VRAM_CEILING_MB = 4500.0
 
-# Word-count-precise samples for the three-tier preset comparison matrix
+# Word-count-precise samples for the preset comparison matrix
 # (Section 4 of the Round 19 mission: 30/100/250-word latency benchmarks).
 SAMPLE_30W = SAMPLE_A  # already exactly ~30 words, reused rather than duplicated
 SAMPLE_100W = (
@@ -306,52 +306,27 @@ def run_all_tests() -> None:
     return results
 
 
-# --- Three-tier preset comparison (Round 19: Eco / Standard / Flagship) -------
-# Filenames must match src/ui/settings_tab.py:MODEL_PRESETS exactly - this is
-# the verification harness for those three shipped presets, not a general
-# candidate search (that's run_all_tests() above).
+# --- Shipped preset comparison (Turbo Flagship / Standard) -------------------
+# Filenames must match src/presets.py:MODEL_PRESETS exactly - this is the
+# verification harness for the shipped presets, not a general candidate
+# search (that's run_all_tests() above).
 PRESET_TIERS = [
-    # kv_cache_quantization matches src/ui/settings_tab.py:MODEL_PRESETS exactly -
-    # False for Eco is the actual fidelity fix this round found (see that file's
-    # comment for the root-cause investigation), not a benchmark-only tweak.
-    # Ceiling history, each raise reflecting a real, accepted cost not a relaxed
-    # goalpost: 3000MB initial target -> 3600MB (Round 21, disabling KV-cache
-    # quantization for the fidelity fix) -> 3700MB (Round 23, n_ctx 4096->8192
-    # for long-form headroom costs ~144MB here - a global change applied to
-    # every tier, not Eco-specific). Still comfortably below Standard's
-    # ~3690MB footprint at the same n_ctx.
-    {"key": "eco", "label": "Eco (IQ4_XS)", "filename": "wisperno-custom-v1.gguf", "vram_ceiling_mb": 3700.0, "kv_cache_quantization": False},
-    {"key": "standard", "label": "Standard (Q4_K_M, 3B)", "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf", "vram_ceiling_mb": None, "kv_cache_quantization": True},
-    # Round 21: Flagship moved from Q4_K_M to Q8_0 weights (near-lossless,
-    # ~3.1GB file vs Q4_K_M's ~1.9GB) - real headroom spent on weight
-    # precision, not just KV-cache precision, per the mission's explicit ask.
-    # Round 20 already ruled out 7B (40.6 tok/s, slowest tier tested) and
-    # speculative decoding (35-48 tok/s, slower than no draft model at all,
-    # plus a real stop-sequence truncation bug) - see settings_tab.py's
-    # MODEL_PRESETS comment and handoff.md Round 20/21 for both investigations.
-    {"key": "flagship", "label": "Flagship (Q8_0, 3B, full-precision KV)", "filename": "Qwen2.5-3B-Instruct-Q8_0.gguf", "vram_ceiling_mb": 5200.0, "kv_cache_quantization": False},
-    # Round 23: Turbo Flagship, a 1.5B model - the only one of three fresh
-    # candidates tested (Llama-3.2-1B, SmolLM2-1.7B, Qwen2.5-1.5B) that's
-    # viable at all; see settings_tab.py's MODEL_PRESETS comment for why the
-    # other two were disqualified outright. NOTE for reading this tier's row
-    # below: "fidelity" here is measured on RAW model output via
-    # _decode_and_latency(), which calls the LLM directly and bypasses
-    # sanity_check() - it is expected to be materially lower than the other
-    # three tiers (that's the honest, disclosed cost of this tier, not a bug).
-    # "traps" DOES go through the real transform()/sanity_check() path (see
-    # _run_conversational_traps below) and reflects what a user actually gets:
-    # the guardrail rescues what the raw model gets wrong.
+    # "fidelity" for Turbo is measured on RAW model output via
+    # _decode_and_latency(), which bypasses sanity_check() - expected to be
+    # lower than Standard's. "traps" DOES go through the real
+    # transform()/sanity_check() path and reflects what a user actually gets.
     {"key": "turbo", "label": "Turbo Flagship (Q8_0, 1.5B)", "filename": "Qwen2.5-1.5B-Instruct-Q8_0.gguf", "vram_ceiling_mb": 4500.0, "kv_cache_quantization": False},
+    {"key": "standard", "label": "Standard (Q4_K_M, 3B)", "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf", "vram_ceiling_mb": 4500.0, "kv_cache_quantization": True},
 ]
 
 
 def run_preset_comparison() -> list:
-    """The verification harness for Round 19's shipped three-tier preset
-    lineup: VRAM, process RAM, decode tok/s, 100-word latency, and fidelity %
-    for each of Eco/Standard/Flagship, run back-to-back with Whisper loaded
-    throughout (matching the real app's combined footprint)."""
+    """The verification harness for the shipped presets: VRAM, process RAM,
+    decode tok/s, 100-word latency, and fidelity % for each, run back-to-back
+    with Whisper loaded throughout (matching the real app's combined
+    footprint). VRAM here is whole-GPU usage (pynvml), including other apps."""
     logger.info("=" * 70)
-    logger.info("  WISPERNO THREE-TIER PRESET COMPARISON (Eco / Standard / Flagship)")
+    logger.info("  WISPERNO PRESET COMPARISON (Turbo Flagship / Standard)")
     logger.info("=" * 70)
 
     cfg = load_config()
@@ -416,7 +391,7 @@ def run_preset_comparison() -> list:
         gc.collect()
 
     logger.info("=" * 70)
-    logger.info("  THREE-TIER COMPARISON MATRIX")
+    logger.info("  PRESET COMPARISON MATRIX")
     logger.info("=" * 70)
     header = f"{'Tier':<24} {'VRAM MB':>9} {'RAM MB':>9} {'Avg tok/s':>10} {'100w lat':>9} {'Fidelity':>9} {'Traps':>7}"
     logger.info(header)
@@ -430,30 +405,13 @@ def run_preset_comparison() -> list:
     logger.info("  GATE CHECKS")
     logger.info("=" * 70)
     for r in rows:
-        if r["key"] == "eco":
-            ceiling = r["vram_ceiling_mb"]
-            ok = r["fidelity"] > 0.965 and r["vram_mb"] < ceiling
-            logger.info(f"  Eco: fidelity {r['fidelity']:.1%} > 96.5%? {'YES' if r['fidelity'] > 0.965 else 'NO'}; "
-                        f"VRAM {r['vram_mb']:.0f}MB < {ceiling:.0f}MB (fidelity-fix-adjusted ceiling)? "
-                        f"{'YES' if r['vram_mb'] < ceiling else 'NO'} -> {'PASS' if ok else 'FAIL'}")
-        elif r["key"] == "flagship":
+        if r["key"] == "standard":
             ceiling = r["vram_ceiling_mb"]
             vram_ok = r["vram_mb"] <= ceiling
-            # Round 21: Flagship moved to Q8_0 weights (near-lossless, ~2x the
-            # bytes of Q4_K_M per parameter) - unlike KV-cache quantization,
-            # weight quantization level DOES cost real decode speed on this
-            # GPU (measured ~25% slower than Standard). The gate here is just
-            # "fits the VRAM ceiling and doesn't lose fidelity" - a speed
-            # parity check against Standard would be testing for something
-            # this tier was never meant to deliver.
             ok = vram_ok and r["fidelity"] > 0.965
-            standard_tps = next((x["avg_tps"] for x in rows if x["key"] == "standard"), r["avg_tps"])
-            slowdown_pct = (1 - r["avg_tps"] / standard_tps) * 100 if standard_tps else 0.0
-            logger.info(f"  Flagship: VRAM {r['vram_mb']:.0f}MB <= {ceiling:.0f}MB? {'YES' if vram_ok else 'NO'}; "
+            logger.info(f"  Standard: VRAM {r['vram_mb']:.0f}MB <= {ceiling:.0f}MB? {'YES' if vram_ok else 'NO'}; "
                         f"fidelity {r['fidelity']:.1%} > 96.5%? {'YES' if r['fidelity'] > 0.965 else 'NO'} "
-                        f"-> {'PASS' if ok else 'FAIL'} (Q8_0 near-lossless weights cost {slowdown_pct:.0f}% "
-                        f"decode speed vs. Standard's Q4_K_M - {r['avg_tps']:.1f} vs {standard_tps:.1f} tok/s - "
-                        f"a real, deliberate trade-off, not a bug; VRAM and speed both spent on precision here)")
+                        f"-> {'PASS' if ok else 'FAIL'}")
         elif r["key"] == "turbo":
             ceiling = r["vram_ceiling_mb"]
             vram_ok = r["vram_mb"] <= ceiling
@@ -462,18 +420,17 @@ def run_preset_comparison() -> list:
             logger.info(f"  Turbo: VRAM {r['vram_mb']:.0f}MB <= {ceiling:.0f}MB? {'YES' if vram_ok else 'NO'}; "
                         f"speed {r['avg_tps']:.1f} tok/s >= 100? {'YES' if speed_ok else 'NO'} "
                         f"-> {'PASS' if ok else 'FAIL'} (speed/VRAM gate only - fidelity/traps for this tier are "
-                        f"EXPECTED to be materially lower than the other three, that's the disclosed trade-off, "
+                        f"EXPECTED to be materially lower than Standard's, that's the disclosed trade-off, "
                         f"not a regression; raw-model fidelity {r['fidelity']:.1%} bypasses the guardrail by "
                         f"design in this measurement, real usage always goes through it)")
 
     logger.success("=" * 70)
-    logger.success(" THREE-TIER COMPARISON COMPLETE")
+    logger.success(" PRESET COMPARISON COMPLETE")
     logger.success("=" * 70)
     return rows
 
 
 if __name__ == "__main__":
-    # Round 19's actual verification need: the three shipped presets, not the
-    # open-ended candidate search (still available - call run_all_tests()
+    # The shipped presets, not the open-ended candidate search (still available - call run_all_tests()
     # directly to re-run that one).
     run_preset_comparison()

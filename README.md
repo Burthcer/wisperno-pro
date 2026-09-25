@@ -15,9 +15,9 @@ audio or text ever leaves the machine.
 
 **Ships with Turbo Flagship as the default engine** - `Qwen2.5-1.5B-Instruct`
 at ~114 tok/s decode, ~3.5GB combined VRAM with Whisper, and the fastest
-measured latency of the four presets (see [BENCHMARKS.md](BENCHMARKS.md)).
-Switch presets any time from Settings if you'd rather trade speed for the
-Flagship tier's extra fidelity headroom.
+measured latency of the two presets (see [BENCHMARKS.md](BENCHMARKS.md)).
+Switch to Standard any time from Settings if you'd rather trade a little
+speed for more consistent cleanup.
 
 ## Core Features
 
@@ -36,15 +36,13 @@ Flagship tier's extra fidelity headroom.
   current design.
 - **Sub-second latency** end to end on the default Turbo Flagship preset.
 - **100% private, fully offline** - no network calls once models are on disk.
-- **Four engine presets** trading VRAM for fidelity/speed (measured, not
+- **Two engine presets** trading speed for cleanup reliability (measured, not
   estimated - see `tests/benchmark_models.py`):
 
   | Preset | VRAM | Decode speed | Notes |
   |---|---|---|---|
   | **Turbo Flagship (default)** | ~3.5 GB | ~114 tok/s | Fastest tier, instant text replacement |
-  | Eco | ~3.6 GB | ~103 tok/s | Compact footprint, Standard-level fidelity |
-  | Standard | ~3.7 GB | ~92 tok/s | Balanced, previous default |
-  | Flagship | ~5.1 GB | ~63 tok/s | Q8_0 weights + fp16 KV-cache, highest fidelity |
+  | Standard | ~3.7 GB | ~92 tok/s | 3B model, most reliable cleanup |
 
 - **Contextual transform modes**: Polish, Prompt Engineer, Bullet Points, Raw
   verbatim, plus a user-defined Transforms hub for custom prompts.
@@ -150,21 +148,15 @@ Laptop GPU, 8GB VRAM) via `tests/benchmark_models.py` and
 reproduce it yourself. Full writeup, including exactly what changed and
 why, is in [BENCHMARKS.md](BENCHMARKS.md).
 
-<p>
-  <img src="assets/screenshots/benchmark-table.png" alt="Wisperno engine benchmark table: Turbo Flagship 3491MB VRAM, 2311MB process RAM, 113.8 tok/s, 0.82s 100-word latency, 97.6% fidelity; Eco 103.3 tok/s; Standard 91.7 tok/s; Flagship 63.1 tok/s. All four roughly 20-30% faster than the previous release following a llama-cpp-python engine upgrade, VRAM unchanged." width="650">
-</p>
-
 | Preset | VRAM | System RAM | Decode Speed | 100-word Latency | Fidelity |
 |---|---|---|---|---|---|
 | **Turbo Flagship (default)** | 3,491 MB | 2,311 MB | **113.8 tok/s** | 0.82s | 97.6% |
-| Eco | 3,621 MB | 2,319 MB | 103.3 tok/s | 0.89s | 97.6% |
 | Standard | 3,691 MB | 2,559 MB | 91.7 tok/s | 1.04s | 98.8% |
-| Flagship | 5,119 MB | 3,871 MB | 63.1 tok/s | 1.48s | 98.8% |
 
-Every preset lands under the 5GB system RAM budget with over 1.6GB of
-headroom. Only Flagship exceeds the 4GB VRAM target (5.1GB) - a disclosed,
-deliberate trade-off for its near-lossless Q8_0 weights, not an oversight;
-the shipped default (Turbo Flagship) stays at 3.5GB. All four tiers pass
+Both presets stay under 4GB of GPU memory and under the 5GB system RAM
+budget. The VRAM column is whole-GPU usage during the benchmark (Whisper +
+LLM + Windows and any other app on the GPU), not Wisperno alone - the
+System Usage tab shows Wisperno's own share. Both tiers pass
 the app's 5-prompt adversarial conversational-trap suite in real usage
 (`sanity_check()` runs on every transform regardless of the raw fidelity
 score above - see BENCHMARKS.md for what that number does and doesn't cover).
@@ -195,8 +187,8 @@ reproduce it.
 Whisper (`large-v3-turbo`, CUDA, int8_float16) loads in **2.8-5.2s** across
 repeated runs (well under the 10s regression ceiling this test guards - a
 prior bug made this take ~173s via an unwanted Hugging Face network probe).
-The LLM loads from its local GGUF in **~1.1-1.2s**, consistent across all
-four presets.
+The LLM loads from its local GGUF in **~1.1-1.2s**, consistent across both
+presets.
 
 **Real speech transcription (not a synthetic tone):** a genuine
 TTS-generated 9.75s spoken sample was transcribed by the actual
@@ -228,7 +220,7 @@ projections.
 | STT backbone | OpenAI Whisper (cloud) + fine-tuned Llama | `large-v3` (full) | `faster-whisper large-v3-turbo` (CTranslate2, ~7x faster decode than full `large-v3`) |
 | VRAM floor | None (any device + internet) | ~10GB | 4GB (2GB triggers automatic CPU fallback) |
 | Marginal cost per use | Subscription | None (hardware only) | None (hardware only) |
-| Text cleanup/formatting | Cloud LLM | None built-in | Local quantized LLM (llama.cpp, 4 VRAM presets) |
+| Text cleanup/formatting | Cloud LLM | None built-in | Local quantized LLM (llama.cpp, 2 presets, both under 4GB) |
 
 ## Credits & Third-Party Models
 
@@ -244,7 +236,7 @@ runtimes - full credit belongs to them:
   **[llama-cpp-python](https://github.com/abetlen/llama-cpp-python)** (MIT) -
   the local LLM inference engine.
 - **[Qwen2.5](https://github.com/QwenLM/Qwen2.5)** (Apache 2.0, Alibaba
-  Cloud) - the default Standard/Flagship/Turbo Flagship/Eco LLM presets, via
+  Cloud) - the Turbo Flagship and Standard LLM presets, via
   [bartowski's GGUF quantizations](https://huggingface.co/bartowski).
 - **Llama 3.2** (Meta's [Llama 3.2 Community License](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE)) -
   the fallback LLM preset. Built with Llama.

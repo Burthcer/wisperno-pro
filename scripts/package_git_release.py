@@ -63,8 +63,6 @@ Local LLM (pick ONE preset to match `config/config.yaml`'s `model_preset`):
 |---|---|---|---|---|
 | **Turbo Flagship (default)** | `bartowski/Qwen2.5-1.5B-Instruct-GGUF` | `Qwen2.5-1.5B-Instruct-Q8_0.gguf` | ~1.6 GB | ~3.5 GB |
 | Standard | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | ~1.9 GB | ~3.7 GB |
-| Flagship | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-Q8_0.gguf` | ~3.3 GB | ~5.1 GB |
-| Eco | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-IQ4_XS.gguf` (rename to `wisperno-custom-v1.gguf`) | ~1.7 GB | ~3.6 GB |
 
 `config/config.yaml` in this folder already ships pre-configured for the
 default (Turbo Flagship) - the table above only matters if you switch
@@ -116,10 +114,10 @@ quantized LLM before pasting the result into whichever app has focus. No
 audio or text ever leaves the machine.
 
 **Ships with Turbo Flagship as the default engine** - `Qwen2.5-1.5B-Instruct`
-at ~91 tok/s decode, ~3.5GB combined VRAM with Whisper, and the fastest
-measured latency of the four presets (see the table below). Switch presets
-any time from Settings if you'd rather trade speed for the Flagship tier's
-extra fidelity headroom.
+at ~114 tok/s decode, ~3.5GB combined VRAM with Whisper, and the fastest
+measured latency of the two presets (see the table below). Switch to
+Standard any time from Settings if you'd rather trade a little speed for
+more consistent cleanup.
 
 ## Core Features
 
@@ -128,15 +126,13 @@ extra fidelity headroom.
   cleanup - pick per-trigger, not an all-or-nothing switch.
 - **Sub-second latency** end to end on the default Turbo Flagship preset.
 - **100% private, fully offline** - no network calls once models are on disk.
-- **Four engine presets** trading VRAM for fidelity/speed (measured, not
+- **Two engine presets** trading speed for cleanup reliability (measured, not
   estimated - see `tests/benchmark_models.py`):
 
   | Preset | VRAM | Decode speed | Notes |
   |---|---|---|---|
-  | **Turbo Flagship (default)** | ~3.5 GB | ~91 tok/s | Fastest tier, instant text replacement |
-  | Eco | ~3.6 GB | ~80 tok/s | Compact footprint, Standard-level fidelity |
-  | Standard | ~3.7 GB | ~72 tok/s | Balanced, previous default |
-  | Flagship | ~5.1 GB | ~53 tok/s | Q8_0 weights + fp16 KV-cache, highest fidelity |
+  | **Turbo Flagship (default)** | ~3.5 GB | ~114 tok/s | Fastest tier, instant text replacement |
+  | Standard | ~3.7 GB | ~92 tok/s | 3B model, most reliable cleanup |
 
 - **Contextual transform modes**: Polish, Prompt Engineer, Bullet Points, Raw
   verbatim, plus a user-defined Transforms hub for custom prompts.
@@ -264,14 +260,11 @@ and `handoff.md`), not estimated:
 | Preset | Measured VRAM | Minimum GPU VRAM to run comfortably |
 |---|---|---|
 | Turbo Flagship (default) | ~3.5 GB | 4GB |
-| Eco | ~3.6 GB | 4GB |
 | Standard | ~3.7 GB | 4GB |
-| Flagship | ~5.1 GB | 6GB |
 
 | VRAM available | Recommended preset |
 |---|---|
-| 6GB+ | Any preset, including Flagship |
-| 4-5GB | Turbo Flagship, Eco, or Standard (default: Turbo Flagship) |
+| 4GB+ | Turbo Flagship (default) or Standard |
 | 2-3GB | Turbo Flagship only, minimal headroom - close other GPU apps |
 | < 2GB / no CUDA GPU | CPU-compatibility fallback (automatic) - see below |
 

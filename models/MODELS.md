@@ -32,8 +32,6 @@ Local LLM (pick ONE preset to match `config/config.yaml`'s `model_preset`):
 |---|---|---|---|---|
 | **Turbo Flagship (default)** | `bartowski/Qwen2.5-1.5B-Instruct-GGUF` | `Qwen2.5-1.5B-Instruct-Q8_0.gguf` | ~1.6 GB | ~3.5 GB |
 | Standard | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | ~1.9 GB | ~3.7 GB |
-| Flagship | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-Q8_0.gguf` | ~3.3 GB | ~5.1 GB |
-| Eco | `bartowski/Qwen2.5-3B-Instruct-GGUF` | `Qwen2.5-3B-Instruct-IQ4_XS.gguf` (rename to `wisperno-custom-v1.gguf`) | ~1.7 GB | ~3.6 GB |
 
 `config/config.yaml` in this folder already ships pre-configured for the
 default (Turbo Flagship) - the table above only matters if you switch

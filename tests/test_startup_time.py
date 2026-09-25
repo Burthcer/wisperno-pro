@@ -127,8 +127,8 @@ def test_boot_recovery_from_stuck_launch() -> None:
         shutil.copy(get_config_dir() / "config.yaml", tmp_config)
 
         engine = WispernoEngine(config_path=str(tmp_config))
-        engine.config.model_preset = "flagship"  # simulate a bad/slow preset having been selected
-        engine.config.llm.model_path = "models/Qwen2.5-3B-Instruct-Q8_0.gguf"
+        engine.config.model_preset = "turbo"  # simulate the preset that hung last launch
+        engine.config.llm.model_path = "models/Qwen2.5-1.5B-Instruct-Q8_0.gguf"
         try:
             engine.start()  # recovery runs synchronously before the load threads spawn
             assert engine.config.model_preset == "standard", (

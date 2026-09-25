@@ -218,7 +218,7 @@ LIVE_CLEANUP_SYSTEM_PROMPT = (
 
 
 def clean_live_transcript_llm(raw_text: str, transformer) -> str:
-    """Post-session cleanup via the active local LLM (Turbo Flagship / Eco /
+    """Post-session cleanup via the active local LLM (Turbo Flagship / Standard /
     whichever preset is loaded) - paragraph breaks, capitalization
     (especially "I"), punctuation, and stutter removal, per the mission's
     explicit ask, rather than the purely rule-based clean_live_transcript()

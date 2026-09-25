@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QTabWidget, QSpinBox, QSlider, QFrame, QDialog, QScrollArea,
 )
 
+from src.presets import BENCHMARK_MATRIX, DEFAULT_PRESET, MODEL_PRESETS
 from src.ui import theme
 from src.ui.scroll_utils import make_scrollable_layout
 from src.ui.shortcut_recorder import KeySequenceRecorder
@@ -26,225 +27,6 @@ from src.ui.shortcut_recorder import KeySequenceRecorder
 # default model's real layer count (Qwen2.5-3B-Instruct: 36, read via GGUF
 # metadata) - the real value is read from the loaded GGUF once available.
 DEFAULT_TOTAL_LAYERS = 36
-
-# Three-tier engine presets, each benchmarked head-to-head via
-# tests/benchmark_models.py::run_preset_comparison() (real GPU measurements -
-# VRAM, process RAM, decode tok/s, 100w latency, verbatim fidelity, and the
-# conversational-trap suite - not vendor-quoted numbers). See handoff.md for
-# the full comparison matrix these descriptions summarize.
-#
-# Round 18's "custom" preset (IQ3_XS) measured ~93% fidelity, below Wisperno's
-# own fidelity bar. Root-caused this round - NOT purely the base-model
-# quantization level the mission's own hypothesis pointed at. Two DISTINCT
-# defects were found and are not conflated here:
-#   1. Q8_0 KV-cache quantization (type_k/type_v=8) breaks generation on some
-#      GGUF builds, independent of base-model precision - proven by testing
-#      the SAME bug (verbatim-echoing one of the polish prompt's own few-shot
-#      examples instead of processing the real input) on Q8_0 weights
-#      (near-lossless, ruling out base-model quantization) and confirming it
-#      disappeared with kv_cache_quantization=False. This is the fix applied
-#      to the Eco tier below.
-#   2. A separate Q4_K_S candidate showed the *same symptom* but did NOT
-#      clear with kv_cache_quantization=False either - a second, still-
-#      unexplained defect specific to that one quant file/build. Disqualified
-#      and not used in any shipped tier; not claimed to be explained by #1.
-# Disabling KV-cache quantization for the Eco tier fixed IQ4_XS to 97.4%
-# fidelity outright (verified against 3 fresh samples) - the fix is
-# `kv_cache_quantization: False` for this tier, not a different model file.
-# Standard/Flagship keep it enabled (extensively
-# retested this round with zero recurrence at Q4_K_M precision or above -
-# the bug appears specific to very-high-bit KV/weight combinations).
-# "Custom" model *training* (fine-tuning/LoRA/pruning) was considered and
-# deliberately not attempted - no training stack is installed in this
-# environment, and a narrow synthetic dataset risks silently making the model
-# worse (catastrophic forgetting) with no way to verify it in one round.
-#
-# Round 20's "Eco v2 Flagship" redirect asked for speculative decoding
-# (Qwen2.5-0.5B draft + this same 3B target) to push Flagship past 85-110
-# tok/s. Implemented it for real (a custom llama_cpp.LlamaDraftModel wrapping
-# a second loaded Llama instance, wired through the standard `draft_model=`
-# param) and benchmarked it head-to-head against no draft model at all.
-# Result: SLOWER in every configuration tried (35-48 tok/s vs. 66-68 tok/s
-# with no draft model) - this 3B model is already compute-bound on this GPU,
-# not memory-bandwidth-bound, which is the regime speculative decoding
-# actually helps (it pays off on much larger target models). Also found a
-# real correctness bug independent of the speed result: combining
-# `draft_model` with the explicit `stop=[...]` sequences transform.py always
-# passes truncates generation early (`finish_reason: "stop"` firing on a
-# false match, verified reproducible at num_pred_tokens=8 and 12, not just
-# a slow-but-correct result) - a genuine llama-cpp-python 0.2.90 interaction
-# bug, not a config mistake. Speculative decoding is disqualified on both
-# grounds and not shipped. See handoff.md Round 20 for the full data.
-# Round 21: mission acknowledged Round 20's finding (a same-architecture
-# Flagship isn't a "real, tangible advantage") and redirected to near-lossless
-# Q8_0 weights instead - real headroom spent on weight precision, not just
-# KV-cache precision. Re-tested speculative decoding against this Q8_0 target
-# specifically (it's more memory-bandwidth-bound than Q4_K_M, the regime
-# where drafting should help most) - still measured SLOWER in every config
-# (36.7-42.0 tok/s vs. 48.4 tok/s with no draft model) and the same
-# stop-sequence truncation bug reproduced again at num_pred_tokens=8. Per the
-# mission's own instructed fallback ("if speculative decoding causes
-# stability or latency regressions, fall back cleanly to Q8_0 with
-# full-precision KV"), that's exactly what's shipped: Q8_0 weights,
-# kv_cache_quantization off, no draft model. Real, measured cost: Q8_0's
-# larger weights (~3.1GB file vs. Q4_K_M's ~1.9GB) cost real decode speed here
-# (50.2 vs. 66.9 tok/s, ~25% slower) - unlike KV-cache quantization, weight
-# quantization level DOES measurably affect throughput on this GPU. This is
-# reported plainly, not hidden: Flagship trades speed for near-lossless
-# precision, on purpose.
-#
-# Round 22 ("110-130 tok/s Flagship" directive): tried the one architecturally
-# sound lever not yet attempted - a smaller base model (Qwen2.5-1.5B-Instruct,
-# both Q4_K_M and Q8_0), reasoning that this session's new sanity_check()
-# guardrail (see transformer.py) might finally make a small model's known
-# conversational-drift problem (Round 15's original bake-off finding)
-# survivable. Measured speed WAS there: 101-137 tok/s, comfortably in the
-# target band. But fidelity dropped to 77% (vs. the required >=98.8%) on a
-# completely ordinary 100-word technical dictation - not an adversarial trap -
-# and the model silently rewrote first-person dictation into second-person
-# ("I am trying to..." -> "You're trying to...", "Have you seen this issue
-# before?"), a real voice/fidelity violation that neither the length-deviation
-# nor the conversational-trigger guardrail catches (the output wasn't longer
-# or shorter enough, and "you're"/"have you" aren't on the trigger list).
-# Confirmed not a fluke: reran the identical input twice on the same loaded
-# model and got two different second-person rewrites (also surfaced a
-# separate, minor finding worth knowing - output isn't perfectly
-# call-to-call deterministic on the same Llama instance despite temp=0.0,
-# unlike the 3B family's own greedy-decoding guarantee verified in Round 20;
-# not chased further since it doesn't change this tier's disqualification).
-# The conversational-trap suite also needed the Python-level sanity_check
-# fallback to rescue 4-5 of 5 adversarial prompts (length blowouts of
-# 1000%+) - the model tried to answer nearly every trap, guardrail or not.
-# Disqualified on fidelity/correctness grounds, not speed - 1.5B is fast
-# enough, just not reliably a dictation cleaner at this parameter count, even
-# with defense-in-depth. Flagship stays on Q8_0/full-precision-KV (Round 21's
-# config) as the best verified speed-within-the-fidelity-bar option; 110-130
-# tok/s was not achieved without a real, demonstrated quality regression on
-# this hardware/model-family combination, and is reported as such rather than
-# claimed. See handoff.md Round 22 for the full investigation and data.
-#
-# Round 23: mission asked for a 4th, explicitly opt-in "Turbo Flagship" tier
-# and named three fresh candidates to test (Llama-3.2-1B, SmolLM2-1.7B,
-# Qwen2.5-1.5B) - tested all three for real, not just Round 22's Qwen figure.
-# Llama-3.2-1B and SmolLM2-1.7B are BOTH decisively worse than Qwen2.5-1.5B:
-# both answer/expand nearly every input into a multi-paragraph essay (Llama
-# needed the fallback guardrail on 5/5 adversarial prompts and was measured
-# SLOWER in practice than Standard, since the wasted 300+-token generation
-# before a rescued fallback still costs real wall-clock time; SmolLM2 hit
-# ~92 tok/s but only 53% fidelity on an ordinary, non-adversarial 100-word
-# sample - worse than Qwen's already-marginal 77%). Qwen2.5-1.5B remains the
-# only viable candidate of the three tested across two rounds now.
-# What changed since Round 22's "disqualified" verdict: this round closed the
-# one detection gap that made shipping it irresponsible - a new voice-shift
-# check in sanity_check() (transformer.py) now catches the exact silent
-# first-to-second-person rewrite Round 22 found undetected ("I am trying to"
-# -> "You're trying to"), turning it into a safe fallback-to-raw-text instead
-# of a silently-wrong injection. With that gap closed, re-measured via the
-# same rigorous streaming methodology used for every other tier
-# (tests/benchmark_models.py's _decode_and_latency, not a rough estimate):
-# ~90 tok/s average across 30/100/250-word samples - genuinely the fastest
-# tier (~20-25% faster than Standard's ~74 tok/s), but NOT the 110-130 tok/s
-# the mission targeted. VRAM 3491MB combined with Whisper (under the 4.5GB
-# ceiling, ~1GB margin), and the conversational-trap suite now needs the
-# fallback rescue on 3/5 prompts (down from 4-5/5 pre-fix) rather than 0/5
-# like the other three tiers. That remaining gap is real and
-# not hidden: Turbo trades a materially higher (but SAFE - never wrong,
-# always either correctly polished or a clean raw fallback) chance of getting
-# unpolished text back, in exchange for speed the other tiers can't reach on
-# this hardware. Shipped as an explicit, clearly-labeled opt-in, not a
-# silent replacement for the reliability-first default (Standard).
-MODEL_PRESETS = {
-    "eco": {
-        "label": "Eco / Hyper-Optimized",
-        "description": "A compact, fully-tuned engine matching Standard's fidelity (98.8%) at a smaller footprint. Best for laptops on battery, lower-spec GPUs, or running quietly alongside other GPU-heavy apps.",
-        "badge": "~3.5 GB VRAM  |  Battery Friendly  |  Lean Footprint",
-        "tooltip": "Ultra-compact footprint designed for laptops on battery, lower-spec GPUs, or running quietly in the background alongside other GPU-heavy apps.",
-        # No repo_id: download_models.py only ever auto-fetches the *primary*
-        # preset's model, so this deliberately can't be mistaken for an
-        # auto-downloadable file if a user switches presets without reading
-        # the docs. Provenance for re-creating it if models/ is ever wiped:
-        # bartowski/Qwen2.5-3B-Instruct-GGUF, file "Qwen2.5-3B-Instruct-IQ4_XS.gguf",
-        # renamed to wisperno-custom-v1.gguf.
-        "repo_id": "",
-        "filename": "wisperno-custom-v1.gguf",
-        "model_path": "models/wisperno-custom-v1.gguf",
-        "kv_cache_quantization": False,
-        "n_ctx": 8192, "flash_attn": True, "chat_style": "standard",
-    },
-    "standard": {
-        "label": "Standard (Balanced)",
-        "description": "Moderate footprint, balanced speed and resource usage. Recommended everyday default.",
-        "badge": "~3.6 GB VRAM  |  Daily Driver  |  Balanced",
-        "tooltip": "The reliable daily driver. Perfect balance of memory usage and fast generation.",
-        "repo_id": "bartowski/Qwen2.5-3B-Instruct-GGUF",
-        "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-        "model_path": "models/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-        "kv_cache_quantization": True,
-        "n_ctx": 8192, "flash_attn": True, "chat_style": "standard",
-    },
-    "flagship": {
-        "label": "Flagship (Precision)",
-        "description": "Near-lossless Q8_0 weights plus full-precision KV cache attention, for the highest possible output fidelity on complex or high-stakes dictation. Trades some speed for maximum detail.",
-        "badge": "~5.0 GB VRAM  |  High-Precision Attention & Maximum Detail",
-        "tooltip": "Q8_0 weights plus uncompressed (fp16) KV-cache attention - the highest-fidelity tier, for complex or high-stakes dictation where precision matters more than speed.",
-        "repo_id": "bartowski/Qwen2.5-3B-Instruct-GGUF",
-        "filename": "Qwen2.5-3B-Instruct-Q8_0.gguf",
-        "model_path": "models/Qwen2.5-3B-Instruct-Q8_0.gguf",
-        "kv_cache_quantization": False,
-        "n_ctx": 8192, "flash_attn": True, "chat_style": "standard",
-    },
-    "turbo": {
-        "label": "Turbo Flagship (Instant Speed)",
-        "description": "A compact, speed-tuned engine for near-instant text replacement - the fastest tier available (~90 tok/s, ~20-25% faster than Standard). A lightweight safety net quietly protects against rare edge cases so output stays reliable.",
-        "badge": "~3.5 GB VRAM  |  Accelerated Throughput  |  Instant Text Replacement",
-        "tooltip": "The fastest tier by a wide margin - best when speed matters most for near-instant text replacement.",
-        "repo_id": "bartowski/Qwen2.5-1.5B-Instruct-GGUF",
-        "filename": "Qwen2.5-1.5B-Instruct-Q8_0.gguf",
-        "model_path": "models/Qwen2.5-1.5B-Instruct-Q8_0.gguf",
-        "kv_cache_quantization": False,
-        "n_ctx": 8192, "flash_attn": True, "chat_style": "standard",
-    },
-    "gemma_beta": {
-        "label": "Gemma 2 2B (Beta)",
-        "description": (
-            "Experimental preset built on Google's Gemma-2-2B architecture, evaluated as an alternative "
-            "to Turbo Flagship - measured 59-74 tok/s (vs. Turbo's ~80-91) and a higher cold-prompt TTFT "
-            "(~330ms vs. ~130-180ms), because Gemma-2's attention design is architecturally incompatible "
-            "with flash attention. Real, measured, disclosed cost - this tier is NOT currently faster than "
-            "Turbo Flagship. Kept opt-in for anyone who wants to try a different model architecture; Turbo "
-            "Flagship remains the recommended, faster default."
-        ),
-        "badge": "~3.7 GB VRAM  |  Slower Than Turbo (measured)  |  Beta / Preview",
-        "tooltip": "Beta: a different small-model architecture under evaluation - measured slower than "
-        "Turbo Flagship on this hardware, not a speed upgrade. Falls back to Turbo Flagship automatically "
-        "if it fails to load.",
-        "repo_id": "bartowski/gemma-2-2b-it-GGUF",
-        "filename": "gemma-2-2b-it-Q4_K_M.gguf",
-        "model_path": "models/gemma-2-2b-it-Q4_K_M.gguf",
-        "kv_cache_quantization": False,
-        # Gemma-2's attention/logit softcapping is incompatible with flash
-        # attention (confirmed against llama.cpp's own Gemma-2 support) -
-        # flash_attn must be False here, which also makes kv_cache_quantization
-        # unavailable (it requires flash_attn) regardless of the value above.
-        # n_ctx trimmed from the other presets' 8192 to 4096: this app's own
-        # dictation/transform inputs are a few hundred words at most, and the
-        # smaller window measurably cuts this preset's KV-cache VRAM cost.
-        "n_ctx": 4096, "flash_attn": False, "chat_style": "gemma",
-    },
-}
-
-
-# Most recent measured results from tests/benchmark_models.py::run_preset_comparison()
-# (Round 24's full four-tier pass - see handoff.md). Static, not live: re-running that
-# benchmark loads/unloads 4 multi-GB GGUF models sequentially (minutes, and would evict
-# whatever's currently loaded) - not something a Settings dialog click should trigger.
-# Update this table by hand after a future benchmark run changes these numbers.
-BENCHMARK_MATRIX = [
-    {"key": "eco", "vram_mb": 3621, "ram_mb": 2319, "tok_s": 80.1, "latency_100w_s": 1.13, "fidelity_pct": 98.8},
-    {"key": "standard", "vram_mb": 3693, "ram_mb": 2558, "tok_s": 71.5, "latency_100w_s": 1.32, "fidelity_pct": 99.2},
-    {"key": "flagship", "vram_mb": 5121, "ram_mb": 3870, "tok_s": 52.5, "latency_100w_s": 1.78, "fidelity_pct": 98.8},
-    {"key": "turbo", "vram_mb": 3493, "ram_mb": 2311, "tok_s": 91.3, "latency_100w_s": 1.01, "fidelity_pct": 96.8},
-]
 
 
 def _label_title(text: str) -> QLabel:
@@ -929,7 +711,7 @@ class _AdvancedSettings(QWidget):
         for i, key in enumerate(keys):
             if MODEL_PRESETS[key]["model_path"] == model_path:
                 return i
-        return keys.index("standard")  # unknown/custom path (e.g. Browse...'d manually) - default to Standard's slot
+        return keys.index(DEFAULT_PRESET)  # unknown/custom path (e.g. Browse...'d manually) - default preset's slot
 
     def _update_preset_description(self) -> None:
         key = self.preset_cb.currentData()
@@ -945,9 +727,8 @@ class _AdvancedSettings(QWidget):
         # layer-count from whatever model was loaded when this tab was built.
         if hasattr(self, "n_gpu_layers_slider"):
             self.n_gpu_layers_slider.setValue(self.n_gpu_layers_slider.maximum())
-        # Eco's KV-cache-quantization=False is the actual fidelity fix (see the
-        # MODEL_PRESETS comment above) - each preset owns this setting, it's
-        # not a separate manual knob once a preset is selected.
+        # Each preset owns its KV-cache quantization setting (see
+        # src/presets.py) - not a separate manual knob once a preset is selected.
         if hasattr(self, "kv_cache_quant_cb"):
             self.kv_cache_quant_cb.setChecked(MODEL_PRESETS[key]["kv_cache_quantization"])
 
@@ -991,7 +772,7 @@ class _AdvancedSettings(QWidget):
         table = QGridLayout()
         table.setHorizontalSpacing(18)
         table.setVerticalSpacing(6)
-        headers = ["Tier", "VRAM", "RAM", "Tokens/s", "100w Latency", "Fidelity"]
+        headers = ["Tier", "GPU total*", "RAM", "Tokens/s", "100w Latency", "Fidelity"]
         for col, text in enumerate(headers):
             lbl = QLabel(text)
             lbl.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-weight: 600; font-size: 8pt;")
@@ -999,7 +780,7 @@ class _AdvancedSettings(QWidget):
         for row, bench in enumerate(BENCHMARK_MATRIX, start=1):
             values = [
                 MODEL_PRESETS[bench["key"]]["label"],
-                f"{bench['vram_mb'] / 1024:.1f} GB",
+                f"{bench['gpu_total_mb'] / 1024:.1f} GB",
                 f"{bench['ram_mb'] / 1024:.1f} GB",
                 f"{bench['tok_s']:.1f}",
                 f"{bench['latency_100w_s']:.2f}s",
@@ -1010,6 +791,11 @@ class _AdvancedSettings(QWidget):
                 lbl.setStyleSheet(f"color: {theme.TEXT_PRIMARY};")
                 table.addWidget(lbl, row, col)
         v.addLayout(table)
+        v.addWidget(_desc_label(
+            f'<span style="color:{theme.TEXT_SECONDARY}; font-size:8pt;">* Whole-GPU memory in use during '
+            "the benchmark (Whisper + LLM + Windows and other apps). Wisperno's own share is shown live "
+            "in System Usage.</span>"
+        ))
 
         close_btn = QPushButton("Close")
         close_btn.setObjectName("primary")

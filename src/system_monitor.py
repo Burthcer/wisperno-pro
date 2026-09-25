@@ -14,6 +14,8 @@ Whole-GPU total/used still comes from pynvml, which IS accurate at that level.
 import ctypes as ct
 import os
 import sys
+from typing import List, Optional, Tuple
+
 from loguru import logger
 import psutil
 
@@ -27,6 +29,16 @@ except Exception as e:
 
 PDH_FMT_LARGE = 0x00000400
 PDH_MORE_DATA = 0x800007D2
+PDH_CSTATUS_VALID_DATA = 0x0
+PDH_CSTATUS_NEW_DATA = 0x1
+
+_COUNTER_PATHS = {
+    "dedicated": r"\GPU Process Memory(*)\Dedicated Usage",
+    # Allocations WDDM has demoted out of VRAM into system RAM (e.g. while a
+    # game needs the GPU) - they drop out of "Dedicated Usage" but are still
+    # Wisperno's, so they're reported separately rather than silently lost.
+    "shared": r"\GPU Process Memory(*)\Shared Usage",
+}
 
 
 class _PdhCounterValue(ct.Structure):
@@ -48,75 +60,163 @@ class _PdhCounterItem(ct.Structure):
 
 class _ProcessVramReader:
     """
-    Wraps a persistent PDH query against the wildcard "GPU Process Memory"
-    counter set, re-collected on each snapshot() call rather than reopened -
-    PdhOpenQuery/PdhAddCounter are comparatively expensive (~ms) and this may
-    be polled every couple of seconds for the life of the app.
+    Per-process GPU memory from the "GPU Process Memory" counter set, the
+    same source Task Manager's per-process "Dedicated GPU memory" column
+    uses. Instance names look like "pid_1234_luid_0x..._phys_0", one per
+    (process, GPU adapter) pair; every instance for our PID is summed.
+
+    The query and its wildcard counters are rebuilt every REOPEN_EVERY reads
+    so the instance list can never go stale for the life of the app (the old
+    reader opened it once, when the dashboard was built - before the models
+    had finished loading).
     """
+
+    REOPEN_EVERY = 15  # reads; ~30s at the System Usage tab's 2s poll
 
     def __init__(self):
         self._pdh = None
         self._h_query = None
-        self._h_counter = None
+        self._h_counters: dict = {}
+        self._reads_since_open = 0
         if sys.platform != "win32":
             return
         try:
             pdh = ct.WinDLL("pdh.dll")
-            h_query = ct.c_void_p()
-            if pdh.PdhOpenQueryW(None, 0, ct.byref(h_query)) != 0:
-                return
-            h_counter = ct.c_void_p()
-            status = pdh.PdhAddEnglishCounterW(
-                h_query, r"\GPU Process Memory(*)\Dedicated Usage", 0, ct.byref(h_counter)
-            )
-            if status != 0:
-                pdh.PdhCloseQuery(h_query)
-                return
-            self._pdh, self._h_query, self._h_counter = pdh, h_query, h_counter
+            # PDH_STATUS is declared as unsigned here so status comparisons
+            # against the unsigned hex constants above work without masking.
+            for name, argtypes in (
+                ("PdhOpenQueryW", [ct.c_wchar_p, ct.c_void_p, ct.POINTER(ct.c_void_p)]),
+                ("PdhAddEnglishCounterW", [ct.c_void_p, ct.c_wchar_p, ct.c_void_p, ct.POINTER(ct.c_void_p)]),
+                ("PdhCollectQueryData", [ct.c_void_p]),
+                ("PdhGetFormattedCounterArrayW",
+                 [ct.c_void_p, ct.c_ulong, ct.POINTER(ct.c_ulong), ct.POINTER(ct.c_ulong), ct.c_void_p]),
+                ("PdhCloseQuery", [ct.c_void_p]),
+            ):
+                fn = getattr(pdh, name)
+                fn.argtypes = argtypes
+                fn.restype = ct.c_ulong
+            self._pdh = pdh
         except Exception as e:
-            logger.debug(f"PDH GPU Process Memory counter unavailable: {e}")
+            logger.debug(f"PDH GPU Process Memory counters unavailable: {e}")
 
-    def read_mb(self, pid: int) -> float:
-        if self._pdh is None:
-            return 0.0
-        try:
-            if self._pdh.PdhCollectQueryData(self._h_query) != 0:
-                return 0.0
-            buf_size = ct.c_ulong(0)
-            item_count = ct.c_ulong(0)
-            # PDH_STATUS is a signed LONG but its error codes (incl. PDH_MORE_DATA)
-            # are defined as unsigned hex literals - ctypes' default signed c_int
-            # return type makes a raw `!= PDH_MORE_DATA` comparison always true.
-            # Mask both sides back to unsigned 32-bit before comparing.
-            status = self._pdh.PdhGetFormattedCounterArrayW(
-                self._h_counter, PDH_FMT_LARGE, ct.byref(buf_size), ct.byref(item_count), None
-            ) & 0xFFFFFFFF
+    def _open(self) -> bool:
+        self._close_query()
+        h_query = ct.c_void_p()
+        if self._pdh.PdhOpenQueryW(None, None, ct.byref(h_query)) != 0:
+            return False
+        counters = {}
+        for key, path in _COUNTER_PATHS.items():
+            h_counter = ct.c_void_p()
+            if self._pdh.PdhAddEnglishCounterW(h_query, path, None, ct.byref(h_counter)) == 0:
+                counters[key] = h_counter
+        if not counters:
+            self._pdh.PdhCloseQuery(h_query)
+            return False
+        self._h_query, self._h_counters = h_query, counters
+        self._reads_since_open = 0
+        return True
+
+    def _sum_for_pid(self, h_counter, prefix: str) -> Tuple[float, List[str]]:
+        """Sum every valid instance starting with `prefix`; returns (MB, per-instance breakdown)."""
+        get = self._pdh.PdhGetFormattedCounterArrayW
+        for _ in range(3):  # the instance list can grow between the size probe and the real read
+            buf_size, item_count = ct.c_ulong(0), ct.c_ulong(0)
+            status = get(h_counter, PDH_FMT_LARGE, ct.byref(buf_size), ct.byref(item_count), None)
             if status != PDH_MORE_DATA or buf_size.value == 0:
-                return 0.0
+                return 0.0, []
             buf = ct.create_string_buffer(buf_size.value)
-            status = self._pdh.PdhGetFormattedCounterArrayW(
-                self._h_counter, PDH_FMT_LARGE, ct.byref(buf_size), ct.byref(item_count), buf
-            ) & 0xFFFFFFFF
+            status = get(h_counter, PDH_FMT_LARGE, ct.byref(buf_size), ct.byref(item_count), buf)
+            if status == PDH_MORE_DATA:
+                continue
             if status != 0:
-                return 0.0
+                return 0.0, []
             items = ct.cast(buf, ct.POINTER(_PdhCounterItem))
+            total_bytes, breakdown = 0, []
+            for i in range(item_count.value):
+                item = items[i]
+                if not item.szName or not item.szName.startswith(prefix):
+                    continue
+                if item.FmtValue.CStatus not in (PDH_CSTATUS_VALID_DATA, PDH_CSTATUS_NEW_DATA):
+                    continue
+                total_bytes += item.FmtValue.largeValue
+                breakdown.append(f"{item.szName}={item.FmtValue.largeValue / 1024 / 1024:.0f}MB")
+            return total_bytes / 1024 / 1024, breakdown
+        return 0.0, []
+
+    def read(self, pid: int) -> Tuple[float, float, List[str]]:
+        """Returns (dedicated_mb, shared_mb, breakdown). Zeros if unavailable."""
+        if self._pdh is None:
+            return 0.0, 0.0, []
+        try:
+            if self._h_query is None or self._reads_since_open >= self.REOPEN_EVERY:
+                if not self._open():
+                    return 0.0, 0.0, []
+            self._reads_since_open += 1
+            if self._pdh.PdhCollectQueryData(self._h_query) != 0:
+                return 0.0, 0.0, []
             prefix = f"pid_{pid}_"
-            total_bytes = sum(
-                items[i].FmtValue.largeValue
-                for i in range(item_count.value)
-                if items[i].szName and items[i].szName.startswith(prefix) and items[i].FmtValue.largeValue
+            dedicated, breakdown = (
+                self._sum_for_pid(self._h_counters["dedicated"], prefix)
+                if "dedicated" in self._h_counters else (0.0, [])
             )
-            return total_bytes / 1024 / 1024
+            shared, _ = (
+                self._sum_for_pid(self._h_counters["shared"], prefix)
+                if "shared" in self._h_counters else (0.0, [])
+            )
+            return dedicated, shared, breakdown
         except Exception as e:
             logger.debug(f"PDH GPU Process Memory read failed: {e}")
-            return 0.0
+            return 0.0, 0.0, []
 
-    def close(self) -> None:
-        if self._pdh is not None:
+    def _close_query(self) -> None:
+        if self._pdh is not None and self._h_query is not None:
             try:
                 self._pdh.PdhCloseQuery(self._h_query)
             except Exception:
                 pass
+        self._h_query, self._h_counters = None, {}
+
+    def close(self) -> None:
+        self._close_query()
+
+
+# Independent cross-check for the per-process counter: whole-GPU usage
+# (pynvml, accurate at that level) sampled right before and right after the
+# engine loads Whisper + the LLM. The difference is what the models took.
+# Other apps can shift GPU usage during those few seconds, so it's an
+# estimate - used as a floor when the per-process counter reads implausibly
+# low, never on its own when the counter looks right.
+_load_baseline_mb: Optional[float] = None
+_models_load_delta_mb: float = 0.0
+
+
+def _gpu_used_mb() -> Optional[float]:
+    if not _NVML_OK:
+        return None
+    try:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).used / 1024 / 1024
+    except Exception:
+        return None
+
+
+def mark_models_loading() -> None:
+    """Call right before the engine starts loading Whisper/the LLM."""
+    global _load_baseline_mb
+    _load_baseline_mb = _gpu_used_mb()
+
+
+def mark_models_loaded() -> None:
+    """Call right after Whisper and the LLM finished loading."""
+    global _models_load_delta_mb
+    after = _gpu_used_mb()
+    if _load_baseline_mb is None or after is None:
+        return
+    _models_load_delta_mb = max(0.0, after - _load_baseline_mb)
+    logger.info(
+        f"[VRAM] Whole-GPU usage went {_load_baseline_mb:.0f}MB -> {after:.0f}MB while loading models "
+        f"(~{_models_load_delta_mb:.0f}MB for Whisper + LLM)."
+    )
 
 
 class SystemMonitor:
@@ -129,6 +229,8 @@ class SystemMonitor:
             except Exception as e:
                 logger.debug(f"No NVIDIA GPU found for telemetry: {e}")
         self._proc_vram = _ProcessVramReader()
+        self._mismatch_logged = False
+        self._first_reading_logged = False
 
     def snapshot(self) -> dict:
         """Returns MB-denominated gpu_total/gpu_used/app_vram and ram_total/ram_used/app_ram."""
@@ -144,7 +246,27 @@ class SystemMonitor:
             except Exception as e:
                 logger.debug(f"GPU total/used telemetry read failed: {e}")
 
-        app_vram_mb = self._proc_vram.read_mb(self._pid)
+        pdh_dedicated_mb, app_shared_mb, breakdown = self._proc_vram.read(self._pid)
+        app_vram_mb, app_vram_source = pdh_dedicated_mb, "per-process counter"
+        if _models_load_delta_mb and not self._first_reading_logged:
+            self._first_reading_logged = True
+            logger.info(
+                f"[VRAM] Per-process counter after model load: {pdh_dedicated_mb:.0f}MB dedicated, "
+                f"{app_shared_mb:.0f}MB shared ({', '.join(breakdown) or 'no instances for this PID'})."
+            )
+        # Counter reads well under what loading the models demonstrably took
+        # (reported: ~1.5GB shown vs ~3.6GB in Task Manager) - trust the
+        # load delta instead, and log both once so the mismatch is visible.
+        if _models_load_delta_mb and pdh_dedicated_mb + app_shared_mb < 0.75 * _models_load_delta_mb:
+            app_vram_mb, app_vram_source = _models_load_delta_mb, "load-time estimate"
+            if not self._mismatch_logged:
+                self._mismatch_logged = True
+                logger.warning(
+                    f"[VRAM] Per-process counter reads {pdh_dedicated_mb:.0f}MB dedicated + "
+                    f"{app_shared_mb:.0f}MB shared, but loading the models took ~{_models_load_delta_mb:.0f}MB "
+                    f"- showing the load-time figure instead. Counter instances for this PID: "
+                    f"{', '.join(breakdown) or 'none'}"
+                )
 
         gpu_util_pct = 0
         gpu_temp_c = None
@@ -173,6 +295,8 @@ class SystemMonitor:
             "gpu_total_mb": gpu_total_mb,
             "gpu_used_mb": gpu_used_mb,
             "app_vram_mb": app_vram_mb,
+            "app_vram_source": app_vram_source,
+            "app_shared_mb": app_shared_mb,
             "gpu_util_pct": gpu_util_pct,
             "gpu_temp_c": gpu_temp_c,
             "ram_total_mb": ram.total / 1024 / 1024,
