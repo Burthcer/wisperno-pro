@@ -19,6 +19,28 @@ designed to make the model answer back instead of cleaning dictation) still
 passes 100% on every tier above despite the lower raw-fidelity score on the
 smaller models.
 
+## Wisperno Pro vs Wisperno, same GPU (measured 2026-09-25)
+
+RTX 4070 Laptop (8 GB), driver 595.79, torch 2.6.0+cu124,
+`llama-cpp-python==0.3.26`. The same harness (`tests/benchmark_models.py`
+from this branch) run back to back against this branch's code and the
+original Wisperno's `main`, same model files:
+
+| Preset | Build | Avg decode speed | 100-word latency | Fidelity | Traps |
+|---|---|---|---|---|---|
+| Turbo Flagship | Wisperno Pro | 110.2 tok/s | 0.85s | 97.6% | pass |
+| Turbo Flagship | Wisperno | 112.2 tok/s | 0.82s | 97.6% | pass |
+| Standard | Wisperno Pro | 88.0 tok/s | 1.05s | 99.2% | pass |
+| Standard | Wisperno | 89.1 tok/s | 1.07s | 98.8% | pass |
+
+Decode speed is the same within run-to-run noise: Pro didn't change the
+model, quantization or inference engine, so it isn't faster. Its changes are
+in what happens around the model - list formatting, cleanup quality, the
+dictionary and per-app styles (see the sections below). VRAM isn't in this
+table: pynvml reads whole-GPU usage, and other apps holding models on the GPU
+during this run made it 6.8-7.0 GB for both builds, not comparable with the
+3.5 GB above.
+
 ## Why these numbers moved since the last release
 
 This build's `llama-cpp-python` inference engine was upgraded twice this

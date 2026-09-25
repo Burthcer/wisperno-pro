@@ -1,7 +1,7 @@
 --extra-index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-torch>=2.4.0
-torchaudio>=2.4.0
+torch==2.6.0
+torchaudio==2.6.0
 faster-whisper>=1.0.0
 sounddevice>=0.4.6
 soundfile>=0.12.1
