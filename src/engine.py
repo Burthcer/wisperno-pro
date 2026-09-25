@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Dict, Optional
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from loguru import logger
 
 from src import audio_cues
@@ -302,8 +302,29 @@ class WispernoEngine(QObject):
 
     # --- Pipeline --------------------------------------------------------------
 
+    def _after_post_roll(self, finish, *args) -> None:
+        """Keep the mic open config.audio.post_roll_ms longer after the key is
+        released, then run `finish` - people release the key while the last
+        syllable is still coming out, which used to get cut off. A Qt timer,
+        not a sleep, so the UI never freezes; presses during that window are
+        ignored (see _is_releasing)."""
+        delay_ms = self.config.audio.post_roll_ms
+        if delay_ms > 0 and self.audio_worker is not None and self.audio_worker.recorder.is_recording:
+            self._releasing = True
+
+            def done() -> None:
+                self._releasing = False
+                finish(*args)
+
+            QTimer.singleShot(delay_ms, done)
+        else:
+            finish(*args)
+
+    def _is_releasing(self) -> bool:
+        return getattr(self, "_releasing", False)
+
     def _on_ptt_press(self) -> None:
-        if not self._engines_ready or self._processing or self._live_worker is not None:
+        if not self._engines_ready or self._processing or self._live_worker is not None or self._is_releasing():
             return
         self._ptt_press_time = time.perf_counter()
         # The badge must reflect what THIS recording will actually do, not
@@ -320,11 +341,14 @@ class WispernoEngine(QObject):
         self.audio_worker.start_recording()
 
     def _on_ptt_release(self) -> None:
-        if not self._engines_ready:
-            return
-        if self.config.audio_cues_enabled:
-            audio_cues.play_stop_cue()
+        if not self._engines_ready or self._is_releasing():
+            return  # already stopping (e.g. key-up and auto-silence in the same instant)
+        self._after_post_roll(self._finish_ptt_release)
+
+    def _finish_ptt_release(self) -> None:
         audio_array = self.audio_worker.stop_recording()
+        if self.config.audio_cues_enabled:
+            audio_cues.play_stop_cue()  # after the mic closed, so the beep isn't recorded
         # The captured-audio buffer's own length, not press-to-release wall-clock
         # time (which runs ~0.3-0.5s long from stream start/stop overhead and would
         # otherwise be what ends up stored as the history row's duration).
@@ -348,6 +372,7 @@ class WispernoEngine(QObject):
             snippets, self.active_mode, record_duration_ms,
             use_direct_formatter=not self.config.auto_llm_polish,
             save_recording=self.config.save_recordings_for_testing,
+            trailing_space=self.config.injector.trailing_space,
         )
         worker.state_changed.connect(self.state_changed)
         worker.result_ready.connect(self.history_added)
@@ -367,7 +392,7 @@ class WispernoEngine(QObject):
         main dictation hotkey, or a Transforms-hub hotkey), then tells the
         hotkey manager that trigger is no longer "active" so a later physical
         release/tap doesn't misfire a second, redundant stop on top of this one."""
-        if not self._engines_ready or not self.audio_worker.recorder.is_recording:
+        if not self._engines_ready or not self.audio_worker.recorder.is_recording or self._is_releasing():
             return
         logger.info("[AUTO-SILENCE] Pause threshold reached - auto-stopping and committing dictation.")
         if self.hotkey_worker:
@@ -379,7 +404,7 @@ class WispernoEngine(QObject):
 
     def _on_transform_press(self, transform_id: str) -> None:
         """A per-transform hotkey (e.g. Alt+X) was pressed - same as the main PTT press, just tagged."""
-        if not self._engines_ready or self._processing or self._live_worker is not None:
+        if not self._engines_ready or self._processing or self._live_worker is not None or self._is_releasing():
             return
         self._active_transform_id = transform_id
         self._ptt_press_time = time.perf_counter()
@@ -399,8 +424,11 @@ class WispernoEngine(QObject):
         text, tap the transform's hotkey" behavior), reusing the exact
         no-selection/short-selection guard SelectionPolishWorker already has.
         """
-        if not self._engines_ready:
-            return
+        if not self._engines_ready or self._is_releasing():
+            return  # already stopping (e.g. key-up and auto-silence in the same instant)
+        self._after_post_roll(self._finish_transform_release, transform_id)
+
+    def _finish_transform_release(self, transform_id: str) -> None:
         self._active_transform_id = None
         audio_array = self.audio_worker.stop_recording()
         if self.config.audio_cues_enabled and audio_array is not None and len(audio_array) > 0:
@@ -427,6 +455,7 @@ class WispernoEngine(QObject):
                 snippets, transform_id, record_duration_ms, system_prompt=transform["system_prompt"],
                 status_label=transform["title"],
                 save_recording=self.config.save_recordings_for_testing,
+                trailing_space=self.config.injector.trailing_space,
             )
         else:
             logger.info(f"[TRANSFORM] No speech captured for '{transform_id}' - trying selected text instead.")
@@ -666,6 +695,10 @@ class WispernoEngine(QObject):
 
     def set_audio_cues_enabled(self, enabled: bool) -> None:
         self.config.audio_cues_enabled = enabled
+        self.save_config()
+
+    def set_trailing_space(self, enabled: bool) -> None:
+        self.config.injector.trailing_space = enabled
         self.save_config()
 
     def set_save_recordings_for_testing(self, enabled: bool) -> None:

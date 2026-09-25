@@ -68,6 +68,11 @@ class AudioConfig(BaseModel):
     min_duration_sec: float = Field(default=0.4, description="Minimum audio duration to process in seconds (below this, discard as a ghost trigger)")
     min_energy_threshold: float = Field(default=0.002, description="RMS energy threshold to filter out background noise / silence - kept low so quiet real speech isn't discarded as silence")
     device_index: Optional[int] = Field(default=None, description="Audio input device index (null = default)")
+    post_roll_ms: int = Field(
+        default=200,
+        description="Keep recording this long after the dictation key is released, so a last word still "
+                     "being spoken when the key comes up isn't cut off. 0 = stop immediately.",
+    )
     auto_silence_seconds: int = Field(
         default=5,
         description="Auto-stop recording (and commit/paste) after this many seconds of continuous "
@@ -158,6 +163,11 @@ class LLMConfig(BaseModel):
 
 
 class InjectorConfig(BaseModel):
+    trailing_space: bool = Field(
+        default=True,
+        description="Type a space after a dictated sentence (one ending in . ! or ?), so the next "
+                    "dictation doesn't run into it ('...today.Next' -> '...today. Next').",
+    )
     pre_paste_delay_ms: int = Field(default=40, description="Delay before sending Ctrl+V for clipboard synchronization")
     post_paste_delay_ms: int = Field(default=80, description="Delay after paste before restoring previous clipboard")
     restore_clipboard: bool = Field(default=True, description="Whether to restore prior clipboard content")

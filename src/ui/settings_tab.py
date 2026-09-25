@@ -350,6 +350,12 @@ class _GeneralSettings(QWidget):
         self.auto_copy_cb.stateChanged.connect(lambda s: engine.set_auto_copy_to_clipboard(s != 0))
         layout.addWidget(self.auto_copy_cb)
 
+        self.trailing_space_cb = QCheckBox("Add a Space After Each Dictated Sentence")
+        self.trailing_space_cb.setToolTip("So the next dictation doesn't run into the previous one ('today.Next').")
+        self.trailing_space_cb.setChecked(engine.config.injector.trailing_space)
+        self.trailing_space_cb.stateChanged.connect(lambda s: engine.set_trailing_space(s != 0))
+        layout.addWidget(self.trailing_space_cb)
+
         # --- Testing ---
         layout.addWidget(_label_title("Testing"))
         self.save_recordings_cb = QCheckBox("Save Recordings for Testing (stores your dictation audio on this PC)")

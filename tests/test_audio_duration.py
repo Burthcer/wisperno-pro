@@ -91,6 +91,7 @@ def test_history_stores_buffer_duration_not_wall_clock() -> None:
     engine.injector = MagicMock()
     engine.config = MagicMock()
     engine.config.auto_llm_polish = False
+    engine.config.audio.post_roll_ms = 0  # release synchronously; post-roll timing has its own test
 
     captured = {}
 

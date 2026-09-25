@@ -31,6 +31,14 @@ from src.config import AppConfig
 from src.swear_filter import apply_profanity_filter
 
 
+def with_trailing_space(text: str) -> str:
+    """'Sentence.' -> 'Sentence. ' so back-to-back dictations don't fuse. Left
+    alone: multi-line output (lists), and anything not ending a sentence."""
+    if text and "\n" not in text and text.endswith((".", "!", "?")):
+        return text + " "
+    return text
+
+
 class AudioWorker(QObject):
     """Wraps AudioRecorder; emits level_changed(float) on every audio block during recording,
     and auto_silence_triggered() once per recording if the user pauses past their configured
@@ -140,7 +148,7 @@ class InferenceWorker(QThread):
         self, audio_array, transcriber, transformer, injector, db, snippets,
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
-        save_recording: bool = False, parent: Optional[QObject] = None,
+        save_recording: bool = False, trailing_space: bool = False, parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -166,6 +174,7 @@ class InferenceWorker(QThread):
         self.use_direct_formatter = use_direct_formatter
         # Settings -> General -> "Save Recordings for Testing" (off by default).
         self.save_recording = save_recording
+        self.trailing_space = trailing_space
 
     def run(self) -> None:
         try:
@@ -201,7 +210,7 @@ class InferenceWorker(QThread):
             else:
                 final_text = self.transformer.transform(raw_text, mode=self.mode)
 
-            injected = self.injector.inject_text(final_text)
+            injected = self.injector.inject_text(with_trailing_space(final_text) if self.trailing_space else final_text)
             latency_ms = (time.perf_counter() - t0) * 1000
 
             # A Transforms-hub hotkey drove this recording (status_label set) vs
