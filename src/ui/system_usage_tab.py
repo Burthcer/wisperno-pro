@@ -19,8 +19,8 @@ from src.system_monitor import SystemMonitor
 # native gloss.
 _BAR_STYLE = QStyleFactory.create("Fusion")
 
-_VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7C3AED, stop:1 #A855F7)"
-_RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4F46E5, stop:1 #818CF8)"
+_VRAM_GRADIENT = theme.VRAM_GRADIENT
+_RAM_GRADIENT = theme.RAM_GRADIENT
 
 
 def _card(title: str) -> tuple:

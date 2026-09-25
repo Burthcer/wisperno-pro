@@ -1,5 +1,6 @@
 """
-Centralized design tokens for Wisperno's Qt UI (floating pill + main dashboard).
+Centralized design tokens for Wisperno's Qt UI (floating pill + main dashboard),
+dark theme.
 Plain hex strings - usable directly in QSS stylesheets or wrapped in QColor by
 callers. Every surface/text colour in the dashboard comes from here; tabs
 shouldn't hard-code their own.
@@ -16,8 +17,7 @@ def get_app_icon() -> QIcon:
     return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
 
 # --- Floating pill ------------------------------------------------------
-# Stays dark on purpose: it floats over whatever app you're typing in, and a
-# dark capsule reads on light and dark apps alike (as Wispr Flow's does).
+# Dark like the dashboard, and it floats over whatever app you're typing in.
 PILL_BG = "#0B0B0F"
 PILL_BG_ALPHA = 0.92
 PILL_BORDER = "#1F1F2B"
@@ -26,8 +26,17 @@ PILL_TEXT_PRIMARY = "#EDEDED"
 PILL_SURFACE = "#17171F"           # inset areas (Live Transcription's text box)
 PILL_BUTTON = "#1C1C26"
 PILL_BUTTON_HOVER = "#262632"
-# The dark overlays (pill, Live Transcription window) use only PILL_* text and
-# surface colours - the dashboard's TEXT_*/BG_* below are for a light canvas.
+# Capsule tint per state (the accent colour below carries the state's hue).
+PILL_BG_RECORDING = "#1E1216"
+PILL_BG_PROCESSING = "#15121F"
+PILL_BG_TYPING = "#101828"
+PILL_BG_SUCCESS = "#101C15"
+PILL_BG_WARNING = "#1F160C"
+PILL_ACCENT = "#7C3AED"            # filled buttons on the overlays (white text 5.7:1)
+PILL_ACCENT_HOVER = "#9333EA"
+PILL_ON_ACCENT = "#FFFFFF"
+# The overlays (pill, Live Transcription window) use only PILL_* text and
+# surface colours, so the dashboard palette can change without touching them.
 
 ACCENT_RECORDING = "#EF4444"       # clean red - listening
 ACCENT_RECORDING_DIM = "#5C2222"
@@ -37,31 +46,40 @@ ACCENT_SUCCESS = "#30D158"         # emerald - injected
 ACCENT_ERROR = "#FF9F0A"           # amber - init taking abnormally long / failed
 
 # --- Main dashboard ---------------------------------------------------------
-# Warm light design (Wispr Flow-like): cream canvas, white cards, ink text,
-# serif display headings, black ink primary buttons, and one violet accent
-# kept for selection, focus and the active tab.
-BG_APP = "#FAF8F5"
-BG_SIDEBAR = "#F3F0EA"
-SIDEBAR_BORDER = "#E8E3DA"
-BG_CARD = "#FFFFFF"
-BG_CARD_HOVER = "#F5F2EC"
-BORDER_SUBTLE = "#E8E3DA"
-BORDER_STRONG = "#CFC8BC"
-INPUT_BG = "#FFFFFF"
-INPUT_BORDER = "#DDD7CD"
-TEXT_PRIMARY = "#1C1B1A"
-TEXT_SECONDARY = "#6B665E"
-TEXT_PLACEHOLDER = "#A29C93"
-INK = "#1C1B1A"                    # primary buttons
-INK_HOVER = "#3A3732"
-ACCENT_PRIMARY = "#7C3AED"
-ACCENT_PRIMARY_ACTIVE = "#6D28D9"  # accent text on light surfaces
-ACCENT_PRIMARY_HOVER = "#6D28D9"
-ACCENT_PRIMARY_WASH = "rgba(124, 58, 237, 0.10)"
-ACCENT_SECONDARY = "#7C5CD6"       # jargon/category badges
-DANGER = "#DC2626"
-DANGER_WASH = "#FEF2F2"
-SUCCESS = "#15803D"
+# Dark: near-black canvas, slightly lifted cards, soft white text, one violet
+# accent. Text colours are chosen for WCAG AA contrast on BG_CARD/BG_APP
+# (tests/test_ui_theme.py checks it): the earlier dark theme's #71717A
+# secondary text was only 3.9:1 on cards.
+BG_APP = "#08080C"
+BG_SIDEBAR = "#0C0C12"
+SIDEBAR_BORDER = "#1A1A22"
+BG_CARD = "#111116"
+BG_CARD_HOVER = "#17171F"
+BORDER_SUBTLE = "#1F1F2B"
+BORDER_STRONG = "#33334A"
+INPUT_BG = "#161620"
+INPUT_BORDER = "#262638"
+TEXT_PRIMARY = "#EDEDED"
+TEXT_SECONDARY = "#9A9AA6"
+TEXT_PLACEHOLDER = "#6B6B76"
+INK = "#7C3AED"                    # primary buttons / active filter pill / selected tab (white text: 5.7:1)
+INK_HOVER = "#9333EA"
+ON_INK = "#FFFFFF"                 # text on INK / ACCENT_PRIMARY fills
+ACCENT_PRIMARY = "#A855F7"
+ACCENT_PRIMARY_ACTIVE = "#C084FC"  # accent text on dark surfaces
+ACCENT_PRIMARY_HOVER = "#9333EA"
+ACCENT_PRIMARY_WASH = "rgba(168, 85, 247, 0.14)"
+ACCENT_SECONDARY = "#9061F9"       # jargon/category badges
+BADGE_EMERALD = "#10B981"          # History "transform"/"live" badges (7.4:1 on cards; #047857 was 3.4:1)
+DANGER = "#EF4444"
+DANGER_WASH = "rgba(239, 68, 68, 0.10)"
+DANGER_WASH_HOVER = "rgba(239, 68, 68, 0.18)"
+DANGER_BORDER = "#5C2222"
+SUCCESS = "#30D158"
+TOOLTIP_BG = "#1C1C26"
+SCROLLBAR_HANDLE = "#2A2A38"
+VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7C3AED, stop:1 #A855F7)"
+RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4F46E5, stop:1 #818CF8)"
 
 FONT_FAMILY = "Segoe UI Variable Text, Segoe UI, Inter"
 FONT_FAMILY_DISPLAY = "Georgia, Cambria, serif"  # headings only: Georgia's old-style 0 reads as "o"
@@ -81,9 +99,9 @@ QLabel, QCheckBox, QRadioButton {{
     background-color: transparent;
 }}
 QToolTip {{
-    background-color: {INK};
-    color: #FFFFFF;
-    border: none;
+    background-color: {TOOLTIP_BG};
+    color: {TEXT_PRIMARY};
+    border: 1px solid {BORDER_SUBTLE};
     padding: 6px 8px;
     border-radius: 6px;
 }}
@@ -123,7 +141,7 @@ QLabel#brand {{
 }}
 QPushButton#liveTranscribeBtn {{
     background-color: {DANGER_WASH};
-    border: 1px solid #F5C2C2;
+    border: 1px solid {DANGER_BORDER};
     border-radius: 10px;
     margin: 0 10px 12px 10px;
     padding: 9px 12px;
@@ -132,7 +150,7 @@ QPushButton#liveTranscribeBtn {{
     text-align: left;
 }}
 QPushButton#liveTranscribeBtn:hover {{
-    background-color: #FDE4E4;
+    background-color: {DANGER_WASH_HOVER};
     border-color: {DANGER};
 }}
 QLabel#versionFooter {{
@@ -152,7 +170,7 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
     padding: 7px 10px;
     color: {TEXT_PRIMARY};
     selection-background-color: {ACCENT_PRIMARY};
-    selection-color: #FFFFFF;
+    selection-color: {ON_INK};
 }}
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{
     border: 1px solid {BORDER_STRONG};
@@ -192,7 +210,7 @@ QPushButton:pressed {{
 QPushButton#primary {{
     background-color: {INK};
     border: none;
-    color: #FFFFFF;
+    color: {ON_INK};
     font-weight: 600;
 }}
 QPushButton#primary:hover {{
@@ -203,7 +221,7 @@ QPushButton#danger {{
 }}
 QPushButton#danger:hover {{
     background-color: {DANGER_WASH};
-    border-color: #F5C2C2;
+    border-color: {DANGER_BORDER};
 }}
 QPushButton#filterPill {{
     background-color: transparent;
@@ -219,7 +237,7 @@ QPushButton#filterPill:hover {{
 QPushButton#filterPill[active="true"] {{
     background-color: {INK};
     border: 1px solid {INK};
-    color: #FFFFFF;
+    color: {ON_INK};
     font-weight: 600;
 }}
 QTableWidget, QListWidget, QTreeWidget {{
@@ -260,7 +278,7 @@ QTabBar::tab:selected {{
     background-color: transparent;
     color: {TEXT_PRIMARY};
     font-weight: 600;
-    border-bottom: 2px solid {INK};
+    border-bottom: 2px solid {ACCENT_PRIMARY};
 }}
 QScrollBar:vertical {{
     background: transparent;
@@ -268,7 +286,7 @@ QScrollBar:vertical {{
     margin: 2px 2px 2px 0px;
 }}
 QScrollBar::handle:vertical {{
-    background: #DAD4CA;
+    background: {SCROLLBAR_HANDLE};
     min-height: 28px;
     border-radius: 3px;
 }}

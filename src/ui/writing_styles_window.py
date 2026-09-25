@@ -61,7 +61,7 @@ QLabel#stylePreview {{ color: {theme.TEXT_PRIMARY}; font-size: 9pt; }}
 QLabel#stylePreview[generating="true"] {{ color: {theme.TEXT_SECONDARY}; font-style: italic; }}
 QPushButton#insertBtn {{
     background-color: {theme.INK}; border: none; border-radius: 6px;
-    color: white; font-weight: 600; padding: 4px 12px; font-size: 9pt;
+    color: {theme.ON_INK}; font-weight: 600; padding: 4px 12px; font-size: 9pt;
 }}
 QPushButton#insertBtn:hover {{ background-color: {theme.INK_HOVER}; }}
 QPushButton#insertBtn:disabled {{ background-color: {theme.BG_CARD_HOVER}; color: {theme.TEXT_SECONDARY}; }}
@@ -71,7 +71,7 @@ QScrollArea {{ background: transparent; border: none; }}
 QScrollArea QWidget {{ background-color: {theme.BG_APP}; }}
 QScrollArea QLabel {{ background-color: transparent; }}
 QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px 2px 2px 0px; }}
-QScrollBar::handle:vertical {{ background: #DAD4CA; min-height: 28px; border-radius: 3px; }}
+QScrollBar::handle:vertical {{ background: {theme.SCROLLBAR_HANDLE}; min-height: 28px; border-radius: 3px; }}
 QScrollBar::handle:vertical:hover {{ background: {theme.BORDER_STRONG}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}

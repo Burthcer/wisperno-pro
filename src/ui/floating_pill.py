@@ -259,29 +259,29 @@ class FloatingPill(QWidget):
 
     def _colors_for_state(self):
         if self.state == STATE_RECORDING:
-            return "#1E1216", theme.ACCENT_RECORDING
+            return theme.PILL_BG_RECORDING, theme.ACCENT_RECORDING
         if self.state == STATE_MIC_STARTING:
             return theme.PILL_BG, theme.PILL_TEXT
         if self.state == STATE_MIC_ERROR:
-            return "#1F160C", theme.ACCENT_ERROR
+            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
         if self.state == STATE_PROCESSING:
-            return "#15121F", theme.ACCENT_PROCESSING
+            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
         if self.state == STATE_TYPING:
-            return "#101828", theme.ACCENT_PROCESSING
+            return theme.PILL_BG_TYPING, theme.ACCENT_PROCESSING
         if self.state == STATE_SUCCESS:
-            return "#101C15", theme.ACCENT_SUCCESS
+            return theme.PILL_BG_SUCCESS, theme.ACCENT_SUCCESS
         if self.state == STATE_MODE_CHANGED:
-            return "#15121F", theme.ACCENT_PROCESSING
+            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
         if self.state == STATE_ERROR:
-            return "#1F160C", theme.ACCENT_ERROR
+            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
         if self.state == STATE_FALLBACK_WARNING:
-            return "#1F160C", theme.ACCENT_ERROR
+            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
         if self.state == STATE_CPU_MODE:
-            return "#1F160C", theme.ACCENT_ERROR
+            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
         if self.state == STATE_SELECTION_PROCESSING:
-            return "#15121F", theme.ACCENT_PROCESSING
+            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
         if self.state == STATE_SELECTION_SUCCESS:
-            return "#101C15", theme.ACCENT_SUCCESS
+            return theme.PILL_BG_SUCCESS, theme.ACCENT_SUCCESS
         return theme.PILL_BG, theme.PILL_BORDER
 
     def _draw_balanced_text(self, painter: QPainter, rect: QRectF, text: str) -> None:

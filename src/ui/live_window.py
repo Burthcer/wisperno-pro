@@ -37,8 +37,8 @@ QPushButton {{
     color: {theme.PILL_TEXT_PRIMARY};
 }}
 QPushButton:hover {{ background-color: {theme.PILL_BUTTON_HOVER}; }}
-QPushButton#stopSave {{ background-color: {theme.ACCENT_PROCESSING}; border: none; color: white; font-weight: 600; }}
-QPushButton#stopSave:hover {{ background-color: {theme.ACCENT_PRIMARY_HOVER}; }}
+QPushButton#stopSave {{ background-color: {theme.PILL_ACCENT}; border: none; color: {theme.PILL_ON_ACCENT}; font-weight: 600; }}
+QPushButton#stopSave:hover {{ background-color: {theme.PILL_ACCENT_HOVER}; }}
 QPushButton#discardBtn {{ color: {theme.ACCENT_RECORDING}; }}
 """
 

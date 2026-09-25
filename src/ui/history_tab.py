@@ -80,8 +80,8 @@ def _badge(text: str) -> QLabel:
 SOURCE_BADGE_COLORS = {
     "dictation": theme.ACCENT_PRIMARY,     # purple
     "text_polish": theme.ACCENT_SECONDARY,  # muted purple
-    "transform": "#047857",                 # emerald (readable on light)
-    "live_transcript": "#047857",           # emerald - matches the mission's "distinct emerald badge" spec
+    "transform": theme.BADGE_EMERALD,       # emerald
+    "live_transcript": theme.BADGE_EMERALD,  # emerald - matches the mission's "distinct emerald badge" spec
     "writing_style": theme.ACCENT_PRIMARY_ACTIVE,  # brighter purple - a Writing Styles (Alt+V) result
 }
 
