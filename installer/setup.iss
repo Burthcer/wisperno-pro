@@ -1,12 +1,15 @@
-; Wisperno Windows installer (Inno Setup 6). Compiled via scripts/build_installer.py,
+; Wisperno Pro Windows installer (Inno Setup 6). A SEPARATE app from the
+; original Wisperno: different AppId, name, install folder, exe and mutex, so
+; installing it never upgrades, replaces or uninstalls an installed Wisperno.
+; The identity values below must match src/branding.py (tests/test_branding.py). Compiled via scripts/build_installer.py,
 ; which passes /DMyAppVersion=<version> read from src/__version__.py - never hardcode
 ; a version here, it would drift out of sync with the actual build.
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"
 #endif
-#define MyAppName "Wisperno"
-#define MyAppPublisher "Wisperno"
-#define MyAppExeName "Wisperno.exe"
+#define MyAppName "Wisperno Pro"
+#define MyAppPublisher "Wisperno Pro"
+#define MyAppExeName "WispernoPro.exe"
 ; Overridden by build_installer.py to a staged directory containing only the
 ; ACTIVE model preset (not every preset ever downloaded to this dev machine's
 ; models\ cache) - see build_installer.py's docstring for why staging exists.
@@ -20,7 +23,9 @@
 ; No prior real installation exists with the earlier placeholder GUID this
 ; installer shipped with before its first real user, so swapping to this one
 ; is safe - it must never change again after this.
-AppId={{8F2B1C94-67A1-4E82-9B03-1D764A981E22}
+; Wisperno Pro's own GUID (the original Wisperno is 8F2B1C94-...). Never
+; reuse the original's: Windows would treat Pro as an upgrade of it.
+AppId={{C6D1A7E3-5B24-4F8E-A1D9-73E2B0F4C518}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -31,7 +36,7 @@ DisableProgramGroupPage=yes
 ; business asking for admin elevation on every install/update.
 PrivilegesRequired=lowest
 OutputDir=..\Final App
-OutputBaseFilename=Wisperno-Setup-v{#MyAppVersion}
+OutputBaseFilename=WispernoPro-Setup-v{#MyAppVersion}
 ; No compression, deliberately - same reasoning as scripts/package_portable.py's
 ; ZIP_STORED choice: this bundle is almost entirely already-compressed binary
 ; data (GGUF weights, CTranslate2 tensors, CUDA DLLs), where LZMA2 buys back a
@@ -42,7 +47,7 @@ Compression=none
 ; Windows/Inno hard-cap a single Setup.exe at ~4.2GB - and this app's own CUDA/
 ; PyTorch/llama.cpp runtime (_internal\, ~5GB) alone already exceeds that,
 ; before models are even added. Disk spanning is Inno's sanctioned mechanism
-; for exactly this: one Wisperno-Setup-v{#MyAppVersion}.exe launcher plus
+; for exactly this: one WispernoPro-Setup-v{#MyAppVersion}.exe launcher plus
 ; numbered .bin volumes, all of which must ship together in the same folder -
 ; not literally one file, but one install experience (double-click the .exe,
 ; the volumes are picked up automatically from beside it).
@@ -52,7 +57,7 @@ SetupIconFile=..\assets\icons\wisperno.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Matches src/single_instance.py's actual MUTEX_NAME exactly - Setup detects
 ; a running instance and prompts to close it before continuing the upgrade.
-AppMutex=Local\Wisperno_SingleInstance_Mutex_9921
+AppMutex=Local\WispernoPro_SingleInstance_Mutex_4417
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 
@@ -70,8 +75,8 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "config\*,models\*,logs\*"
 Source: "{#SourceDir}\models\*"; DestDir: "{app}\models"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; User state - never clobbered on upgrade. wisperno.db itself lives entirely
-; outside {app} (%APPDATA%\Wisperno\wisperno.db - see src/config.py's
-; get_db_path()), so the installer never touches it at all; only
+; outside {app} (%APPDATA%\WispernoPro\wisperno.db - see src/config.py's
+; get_db_path()) - %APPDATA%\WispernoPro\wisperno.db for Pro - so the installer never touches it at all; only
 ; config.yaml/dictionary.json live inside {app} and need the explicit guard.
 Source: "{#SourceDir}\config\config.yaml"; DestDir: "{app}\config"; Flags: onlyifdoesntexist
 Source: "{#SourceDir}\config\dictionary.json"; DestDir: "{app}\config"; Flags: onlyifdoesntexist
@@ -89,14 +94,14 @@ Name: "{autoprograms}\{#MyAppName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeNam
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch Wisperno now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch Wisperno Pro now"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\logs"
 
 [Messages]
 WelcomeLabel1=Welcome to the [name] Setup Wizard
-WelcomeLabel2=This will install [name/ver] on your computer.%n%nWisperno - Local Ultra-Fast Dictation & Voice Intelligence.%n100%% Private, Offline Speech-to-Text Powered by Whisper & Local SLMs. No audio or text ever leaves this machine.%n%nThis installation requires approximately 8.5 GB of free disk space for the application and its offline neural network models (speech recognition + local language model).%n%nIt is recommended that you close all other applications before continuing.
+WelcomeLabel2=This will install [name/ver] on your computer. It installs alongside the original Wisperno and does not change or replace it.%n%nWisperno Pro - Local Ultra-Fast Dictation & Voice Intelligence.%n100%% Private, Offline Speech-to-Text Powered by Whisper & Local SLMs. No audio or text ever leaves this machine.%n%nThis installation requires approximately 8.5 GB of free disk space for the application and its offline neural network models (speech recognition + local language model).%n%nIt is recommended that you close all other applications before continuing.
 ; This app isn't code-signed, so Windows Defender/SmartScreen scans the newly-
 ; extracted exe + its DLLs the first time it's ever run - measured at ~26s of
 ; apparent "nothing happening" before the very first log line, vs. 2s on every

@@ -8,12 +8,23 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QIcon, QAction, QActionGroup, QPixmap, QPainter, QColor
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
+from src.branding import APP_NAME
+
 MODES = ["polish", "prompt_engineer", "bullets", "code", "raw"]
 MODE_LABELS = {"polish": "Polish", "prompt_engineer": "Prompt Engineer", "bullets": "Bullets", "code": "Code & CLI", "raw": "Raw"}
 
 
 def build_icon() -> QIcon:
-    """Draw a simple mic-dot glyph in-memory so no external asset is strictly required."""
+    """The app logo (gold-ringed "PRO" mark, so it's distinguishable from the
+    original Wisperno's tray icon); a drawn mic-dot glyph if the asset is missing."""
+    try:
+        from src.ui.theme import get_app_icon
+
+        icon = get_app_icon()
+        if not icon.isNull():
+            return icon
+    except Exception:
+        pass
     size = 64
     pix = QPixmap(size, size)
     pix.fill(QColor(0, 0, 0, 0))
@@ -39,7 +50,7 @@ class TrayIcon(QObject):
         self.controller = controller
 
         self.icon = QSystemTrayIcon(build_icon(), parent)
-        self.icon.setToolTip("Wisperno")
+        self.icon.setToolTip(APP_NAME)
 
         menu = QMenu()
         menu.addAction("Open Dashboard", self.open_dashboard_requested.emit)
@@ -71,7 +82,7 @@ class TrayIcon(QObject):
             self._trigger_actions[key] = action
 
         menu.addSeparator()
-        menu.addAction("Exit Wisperno", self._exit)
+        menu.addAction(f"Exit {APP_NAME}", self._exit)
 
         self.icon.setContextMenu(menu)
         self.icon.activated.connect(self._on_activated)

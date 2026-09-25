@@ -13,14 +13,18 @@ import sys
 from typing import Optional
 
 from loguru import logger
+from src.branding import (
+    APP_NAME, EXE_NAME, MUTEX_NAME as BRAND_MUTEX_NAME, ORIGINAL_EDITION_MUTEX, ORIGINAL_EDITION_NAME,
+    OVERLAY_WINDOW_TITLE as BRAND_OVERLAY_TITLE,
+)
 
 kernel32 = ctypes.windll.kernel32
 user32 = ctypes.windll.user32
 
-MUTEX_NAME = r"Local\Wisperno_SingleInstance_Mutex_9921"
+MUTEX_NAME = BRAND_MUTEX_NAME
 ERROR_ALREADY_EXISTS = 183
 
-OVERLAY_WINDOW_TITLE = "Wisperno Overlay"
+OVERLAY_WINDOW_TITLE = BRAND_OVERLAY_TITLE
 
 # The handle must outlive acquire() - if it is garbage collected the OS releases
 # the mutex and the guard silently stops working. Held at module scope for the
@@ -49,10 +53,10 @@ def _notify_already_running() -> None:
         # MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST
         user32.MessageBoxW(
             None,
-            "Wisperno is already running.\n\n"
-            "Look for the pill at the bottom of your screen, or the Wisperno icon "
+            f"{APP_NAME} is already running.\n\n"
+            f"Look for the pill at the bottom of your screen, or the {APP_NAME} icon "
             "in your system tray (bottom-right, next to the clock).",
-            "Wisperno",
+            APP_NAME,
             0x00000000 | 0x00000040 | 0x00010000 | 0x00040000,
         )
     except Exception:
@@ -78,7 +82,7 @@ def acquire(notify: bool = True) -> None:
     last_error = kernel32.GetLastError()
 
     if _mutex_handle and last_error == ERROR_ALREADY_EXISTS:
-        logger.warning("Another Wisperno instance is already running - exiting this one.")
+        logger.warning(f"Another {APP_NAME} instance is already running - exiting this one.")
         focused = _focus_existing_instance()
         if notify and not focused and not os.environ.get("WISPERNO_QUIET_DUPLICATE"):
             _notify_already_running()
@@ -92,6 +96,42 @@ def acquire(notify: bool = True) -> None:
         return
 
     logger.info("Single-instance mutex acquired.")
+
+
+def original_edition_running() -> bool:
+    """True if the original Wisperno (a separate app) is running right now."""
+    SYNCHRONIZE = 0x00100000
+    try:
+        handle = kernel32.OpenMutexW(SYNCHRONIZE, False, ORIGINAL_EDITION_MUTEX)
+    except Exception:
+        return False
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    return False
+
+
+def warn_if_original_edition_running() -> bool:
+    """Both apps answer the same default hotkeys, so with both running every
+    dictation is typed twice. Say so once at startup; never block or exit -
+    the user may have deliberately changed one app's hotkeys."""
+    if not original_edition_running():
+        return False
+    logger.warning(f"The original {ORIGINAL_EDITION_NAME} app is also running - hotkeys may trigger both apps.")
+    if not os.environ.get("WISPERNO_QUIET_DUPLICATE"):
+        try:
+            user32.MessageBoxW(
+                None,
+                f"The original {ORIGINAL_EDITION_NAME} app is also running.\n\n"
+                f"Both apps listen for the same shortcuts, so each dictation would be typed twice. "
+                f"Quit {ORIGINAL_EDITION_NAME} (right-click its tray icon -> Exit) while you use {APP_NAME}, "
+                f"or give one of them different shortcuts in Settings.",
+                APP_NAME,
+                0x00000030 | 0x00040000,  # MB_ICONWARNING | MB_TOPMOST
+            )
+        except Exception:
+            pass
+    return True
 
 
 def is_held() -> bool:
@@ -132,7 +172,7 @@ def kill_orphaned_instances(exclude_self: bool = True) -> int:
 
     try:
         result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq Wisperno.exe", "/FO", "CSV", "/NH"],
+            ["tasklist", "/FI", f"IMAGENAME eq {EXE_NAME}", "/FO", "CSV", "/NH"],
             capture_output=True,
             text=True,
             timeout=15,

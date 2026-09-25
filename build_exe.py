@@ -1,5 +1,5 @@
 """
-Versioned build script for producing a standalone Wisperno.exe via PyInstaller.
+Versioned build script for producing a standalone WispernoPro.exe via PyInstaller.
 
 Usage:
     python build_exe.py
@@ -7,7 +7,7 @@ Usage:
 Runs `pyinstaller wisperno.spec`, then assembles the result into:
 
     Final App/v{VERSION}/
-        Wisperno.exe
+        WispernoPro.exe
         models/            (junction to the source tree's models/ - avoids
                              duplicating multi-GB model files on every build)
         config/
@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-PYINSTALLER_DIST_DIR = BASE_DIR / "dist" / "Wisperno"
+PYINSTALLER_DIST_DIR = BASE_DIR / "dist" / "WispernoPro"
 
 sys.path.insert(0, str(BASE_DIR))
 from src.__version__ import __version__  # noqa: E402
@@ -34,7 +34,7 @@ from src.__version__ import __version__  # noqa: E402
 
 def run_pyinstaller() -> None:
     print("=" * 70)
-    print(" Building Wisperno.exe with PyInstaller (this can take several minutes)")
+    print(" Building WispernoPro.exe with PyInstaller (this can take several minutes)")
     print("=" * 70)
     result = subprocess.run(
         [sys.executable, "-m", "PyInstaller", "wisperno.spec", "--noconfirm", "--clean"],
@@ -72,16 +72,16 @@ def link_or_copy_models(target_dir: Path) -> None:
 
 def stop_running_instances() -> None:
     """
-    Terminate any running Wisperno.exe before touching the output folder.
+    Terminate any running WispernoPro.exe before touching the output folder.
 
     A running instance holds logs/wisperno.log open, which makes rmtree() fail with
     PermissionError (WinError 32) and leaves a half-wiped distribution behind.
     """
     result = subprocess.run(
-        ["taskkill", "/F", "/IM", "Wisperno.exe", "/T"], capture_output=True, text=True
+        ["taskkill", "/F", "/IM", "WispernoPro.exe", "/T"], capture_output=True, text=True
     )
     if "SUCCESS" in result.stdout:
-        print("Stopped a running Wisperno.exe before rebuilding.")
+        print("Stopped a running WispernoPro.exe before rebuilding.")
         time.sleep(2)  # let Windows release the file handles
 
 
@@ -93,7 +93,7 @@ def assemble_final_app() -> Path:
             shutil.rmtree(version_dir)
         except PermissionError as e:
             print(f"\nCould not clear '{version_dir}': {e}")
-            print("Something still holds a file open there - close Wisperno and retry.")
+            print("Something still holds a file open there - close Wisperno Pro and retry.")
             sys.exit(1)
     version_dir.mkdir(parents=True)
 
@@ -119,13 +119,13 @@ def assemble_final_app() -> Path:
 
     (version_dir / "logs").mkdir(exist_ok=True)
 
-    init_database(version_dir)  # seeds %APPDATA%\Wisperno\wisperno.db, not version_dir - see docstring
+    init_database(version_dir)  # seeds %APPDATA%\WispernoPro\wisperno.db, not version_dir - see docstring
     link_or_copy_models(version_dir)
 
     (version_dir / "README.txt").write_text(
-        f"Wisperno v{__version__}\n"
+        f"Wisperno Pro v{__version__}\n"
         "========================\n\n"
-        "Run Wisperno.exe. It runs silently in the background with a tray icon\n"
+        "Run WispernoPro.exe. It runs silently in the background with a tray icon\n"
         "(bottom-right of your taskbar) and a floating status pill.\n\n"
         f"Default hotkeys:\n"
         f"  Ctrl+Alt        Hold to talk (or tap, if Tap-to-Toggle is enabled)\n"
@@ -144,7 +144,7 @@ def assemble_final_app() -> Path:
 def init_database(version_dir: Path) -> None:
     """
     Create wisperno.db with its schema (and migrate config/dictionary.json into
-    it) so first launch doesn't pay that cost. Seeded at %APPDATA%\\Wisperno\\
+    it) so first launch doesn't pay that cost. Seeded at %APPDATA%\\WispernoPro\\
     wisperno.db - the app's one real runtime location (src/config.py:get_db_path)
     - NOT version_dir, which would be a stray, never-read copy now that history
     survives independently of which build folder the user is running.
@@ -164,7 +164,7 @@ def main() -> None:
     run_pyinstaller()
     version_dir = assemble_final_app()
     print("\n" + "=" * 70)
-    print(f" Build complete: {version_dir}\\Wisperno.exe")
+    print(f" Build complete: {version_dir}\\WispernoPro.exe")
     print("=" * 70)
 
 

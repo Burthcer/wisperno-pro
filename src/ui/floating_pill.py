@@ -16,6 +16,7 @@ from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPainterPath, Q
 from PySide6.QtWidgets import QWidget, QMenu
 
 from src.ui import theme
+from src.branding import APP_NAME, OVERLAY_WINDOW_TITLE
 
 STATE_LOADING = "loading"
 STATE_IDLE = "idle"
@@ -78,7 +79,7 @@ class FloatingPill(QWidget):
         # must never be able to stretch toward screen width.
         self.setMaximumWidth(420)
         self.setFixedHeight(PILL_H)
-        self.setWindowTitle("Wisperno Overlay")  # matched by src.single_instance to focus a running instance
+        self.setWindowTitle(OVERLAY_WINDOW_TITLE)  # matched by src.single_instance to focus a running instance
         self.setWindowIcon(theme.get_app_icon())
         self.setMouseTracking(True)  # needed for hover-to-reveal on the close button
 
@@ -223,7 +224,7 @@ class FloatingPill(QWidget):
         """Size the dormant pill to fit its label - long rebound shortcuts (Ctrl+Alt+Shift+V) must not clip.
         Upper-bounded as well as lower-bounded: no code path (this one included) should ever be able
         to stretch the pill toward screen width, whatever the hotkey label ends up being."""
-        label = f"✦ Wisperno | Ready [{self.hotkey_label}]"
+        label = f"✦ {APP_NAME} | Ready [{self.hotkey_label}]"
         metrics = QFontMetrics(QFont(theme.FONT_FAMILY, 9))
         text_width = metrics.horizontalAdvance(label)
         return max(240, min(text_width + 60, 420))
@@ -300,7 +301,7 @@ class FloatingPill(QWidget):
 
         if self.state in (STATE_IDLE, STATE_LOADING):
             painter.setPen(QColor(theme.ACCENT_PROCESSING if self.state == STATE_LOADING else theme.PILL_TEXT))
-            label = "✦ Wisperno | Starting..." if self.state == STATE_LOADING else f"✦ Wisperno | Ready [{self.hotkey_label}]"
+            label = f"✦ {APP_NAME} | Starting..." if self.state == STATE_LOADING else f"✦ {APP_NAME} | Ready [{self.hotkey_label}]"
             text_w = w - 2 * m - (22 if self.state == STATE_IDLE else 0)  # leave room for the close glyph
             painter.drawText(QRectF(m, 0, text_w, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
             if self.state == STATE_IDLE:
@@ -410,7 +411,7 @@ class FloatingPill(QWidget):
             painter.setPen(QColor(theme.ACCENT_ERROR))
             bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
             painter.setFont(bold)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "⚠ Wisperno | Startup is stuck - see logs/wisperno.log")
+            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), f"⚠ {APP_NAME} | Startup is stuck - see logs/wisperno.log")
             return
 
         if self.state == STATE_FALLBACK_WARNING:
@@ -552,7 +553,7 @@ class FloatingPill(QWidget):
         menu.addAction("Cycle Mode", self.cycle_mode_requested.emit)
         menu.addSeparator()
         menu.addAction("Hide Pill", self.hide_pill_requested.emit)
-        menu.addAction("Quit Wisperno Completely", self.quit_requested.emit)
+        menu.addAction(f"Quit {APP_NAME} Completely", self.quit_requested.emit)
         menu.exec(event.globalPos())
 
     # --- Visibility toggle (tray) --------------------------------------------

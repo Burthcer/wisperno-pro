@@ -1,10 +1,10 @@
 """
-Verifies Wisperno.exe actually boots when launched from a foreign working
+Verifies WispernoPro.exe actually boots when launched from a foreign working
 directory (exactly what a Desktop/Start Menu shortcut simulates before
 installer/setup.iss's explicit WorkingDir: "{app}" was added) - the reported
 "installed app freezes on launch" defect.
 
-Targets Final App/v{VERSION}/Wisperno.exe directly (not a fresh install) -
+Targets Final App/v{VERSION}/WispernoPro.exe directly (not a fresh install) -
 fast and repeatable; the installer's own [Files]/[Icons] correctness (does
 models/ actually land, do shortcuts carry WorkingDir) was verified manually
 this round with a real install/uninstall cycle - see handoff.md - and isn't
@@ -27,7 +27,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 from src.__version__ import __version__  # noqa: E402
 
-EXE_PATH = BASE_DIR / "Final App" / f"v{__version__}" / "Wisperno.exe"
+EXE_PATH = BASE_DIR / "Final App" / f"v{__version__}" / "WispernoPro.exe"
 # NOT the mission-specified 5s: measured directly this round, the FIRST launch
 # of a freshly-built exe took 26s just to reach its first log line (before any
 # app code beyond a few stdlib imports even runs) - re-running the exact same,
@@ -83,7 +83,7 @@ def test_launch_from_foreign_working_directory() -> None:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        subprocess.run(["taskkill", "/F", "/IM", "Wisperno.exe", "/T"], capture_output=True)
+        subprocess.run(["taskkill", "/F", "/IM", "WispernoPro.exe", "/T"], capture_output=True)
 
 
 def run_all_tests() -> None:

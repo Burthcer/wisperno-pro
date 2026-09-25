@@ -58,6 +58,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from loguru import logger
 from src.config import get_base_dir  # cheap import - no heavy ML deps
+from src.branding import APP_NAME, APP_USER_MODEL_ID  # constants only
 
 # Every path in this app already resolves off get_base_dir() (sys.executable's
 # own directory when frozen, never os.getcwd() - see config.py), so nothing
@@ -88,11 +89,12 @@ logger.add(
     level="DEBUG",
     encoding="utf-8",
 )
-logger.info("Wisperno starting - logging initialized.")
+logger.info(f"{APP_NAME} starting - logging initialized.")
 
 from src import single_instance  # noqa: E402
 
 single_instance.acquire()
+single_instance.warn_if_original_edition_running()
 
 # Windows groups taskbar entries and resolves the "this process's icon" by
 # Application User Model ID rather than executable path alone - without an
@@ -102,7 +104,7 @@ single_instance.acquire()
 if sys.platform == "win32":
     try:
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Wisperno.Desktop.1.0")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
     except Exception:
         pass
 

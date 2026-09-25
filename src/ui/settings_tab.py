@@ -21,6 +21,7 @@ from src.presets import BENCHMARK_MATRIX, DEFAULT_PRESET, MODEL_PRESETS
 from src.ui import theme
 from src.ui.scroll_utils import make_scrollable_layout
 from src.ui.shortcut_recorder import KeySequenceRecorder
+from src.branding import APP_NAME
 
 # Fallback layer count for the slider range/estimate before a model has
 # finished loading (so Transformer.active_model_layers isn't known yet - the
@@ -458,7 +459,7 @@ class _GeneralSettings(QWidget):
         if hasattr(os, "startfile"):
             os.startfile(folder)  # Windows Explorer
         else:
-            QMessageBox.information(self, "Wisperno", f"Recordings folder:\n{folder}")
+            QMessageBox.information(self, APP_NAME, f"Recordings folder:\n{folder}")
 
     def _on_device_changed(self, _index: int) -> None:
         self.engine.set_audio_device(self.selected_device_index())
@@ -477,7 +478,7 @@ class _GeneralSettings(QWidget):
 
     def _test_mic(self) -> None:
         if not self.engine.audio_worker:
-            QMessageBox.warning(self, "Wisperno", "Audio engine hasn't finished loading yet.")
+            QMessageBox.warning(self, APP_NAME, "Audio engine hasn't finished loading yet.")
             return
         self.test_mic_btn.setEnabled(False)
         self.engine.audio_worker.level_changed.connect(self._update_meter)
@@ -798,12 +799,12 @@ class _AdvancedSettings(QWidget):
         if model_dirty:
             self.engine.restart_engines()
             QMessageBox.information(
-                self, "Wisperno",
+                self, APP_NAME,
                 f"Settings applied.{note}\nReloading Whisper/LLM with the new hardware settings now - "
                 "dictation is briefly unavailable while this finishes."
             )
         else:
-            QMessageBox.information(self, "Wisperno", f"Settings applied.{note}")
+            QMessageBox.information(self, APP_NAME, f"Settings applied.{note}")
 
     def _initial_preset_index(self, engine) -> int:
         """Prefer the persisted preset key; fall back to matching the current
@@ -965,7 +966,7 @@ class _AdvancedSettings(QWidget):
     def _clear_oldest(self, engine) -> None:
         deleted = engine.db.clear_oldest_transcripts(fraction=0.25)
         self._refresh_storage_stats(engine)
-        QMessageBox.information(self, "Wisperno", f"Deleted {deleted} of the oldest transcripts (pinned ones kept).")
+        QMessageBox.information(self, APP_NAME, f"Deleted {deleted} of the oldest transcripts (pinned ones kept).")
 
     def _browse_model(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Select GGUF LLM model", "", "GGUF model (*.gguf);;All files (*.*)")

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from src.ui import theme
 from src.ui.shortcut_recorder import KeySequenceRecorder
+from src.branding import APP_NAME
 
 _FIELD_QSS = (
     f"background-color: {theme.INPUT_BG}; border: 1px solid {theme.BORDER_SUBTLE}; "
@@ -308,7 +309,7 @@ class _TransformEditor(QWidget):
             system_prompt=self.prompt_edit.toPlainText(),
         )
         self.engine.refresh_transform_hotkeys()
-        QMessageBox.information(self, "Wisperno", "Transform saved.")
+        QMessageBox.information(self, APP_NAME, "Transform saved.")
 
     def _delete(self) -> None:
         if not self.transform_id:
@@ -321,7 +322,7 @@ class _TransformEditor(QWidget):
 
     def _preview(self) -> None:
         if not self.engine.transformer:
-            QMessageBox.warning(self, "Wisperno", "The transform engine hasn't finished loading yet.")
+            QMessageBox.warning(self, APP_NAME, "The transform engine hasn't finished loading yet.")
             return
         text = self.test_input.toPlainText().strip()
         if not text:

@@ -47,7 +47,7 @@ def _build_main_window():
             super().__init__()
             self.config = load_config()
             # An isolated temp DB per test, NEVER the real production
-            # %APPDATA%\Wisperno\wisperno.db - a prior version of this file
+            # %APPDATA%\WispernoPro\wisperno.db - a prior version of this file
             # used get_db_path() directly here, and test_dictionary_add_word_dock_stays_pinned's
             # 50 synthetic "word0"->"replacement0" entries below ended up
             # permanently seeded into a real user's actual dictionary as a

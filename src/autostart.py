@@ -6,9 +6,10 @@ Adds/removes a HKCU Run key so the app can launch automatically on login.
 import sys
 import winreg
 from loguru import logger
+from src.branding import AUTOSTART_VALUE_NAME
 
 RUN_KEY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
-APP_NAME = "Wisperno"
+APP_NAME = AUTOSTART_VALUE_NAME
 
 
 def _launch_command() -> str:

@@ -20,6 +20,7 @@ from src.ui.snippets_tab import SnippetsTab
 from src.ui.system_usage_tab import SystemUsageTab
 from src.ui.icons import NAV_ICONS
 from src.__version__ import __version__
+from src.branding import APP_NAME
 
 
 class MainWindow(QMainWindow):
@@ -28,7 +29,7 @@ class MainWindow(QMainWindow):
         self.engine = engine
         self.controller = daemon_controller  # for autostart / pill-visibility toggles
 
-        self.setWindowTitle("Wisperno")
+        self.setWindowTitle(APP_NAME)
         self.setWindowIcon(theme.get_app_icon())
         self.setStyleSheet(theme.MAIN_WINDOW_QSS)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -54,7 +55,7 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 12, 0, 12)
         sidebar_layout.setSpacing(0)
-        sidebar_layout.addWidget(QLabel("✦ Wisperno", objectName="brand"))
+        sidebar_layout.addWidget(QLabel(f"✦ {APP_NAME}", objectName="brand"))
 
         # A standalone action button, not a QListWidgetItem: nav items switch
         # the QStackedWidget's page, but Live Transcribe launches a separate
@@ -70,7 +71,7 @@ class MainWindow(QMainWindow):
         self.nav.setFrameShape(QFrame.Shape.NoFrame)
         self.nav.setIconSize(QSize(18, 18))
         sidebar_layout.addWidget(self.nav, 1)
-        sidebar_layout.addWidget(QLabel(f"Wisperno v{__version__}", objectName="versionFooter"))
+        sidebar_layout.addWidget(QLabel(f"{APP_NAME} v{__version__}", objectName="versionFooter"))
         root.addWidget(sidebar, 0)  # stretch 0: never grows/shrinks past its fixed width
 
         self.stack = QStackedWidget()

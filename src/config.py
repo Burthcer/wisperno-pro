@@ -11,6 +11,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from src.app_context import DEFAULT_APP_STYLES
+from src.branding import APP_DATA_DIR_NAME
 
 
 def get_base_dir() -> Path:
@@ -37,7 +38,7 @@ def get_app_data_dir() -> Path:
     a new build over the old one or the distribution folder gets wiped.
     """
     base = Path(os.environ.get("APPDATA", str(Path.home())))
-    data_dir = base / "Wisperno"
+    data_dir = base / APP_DATA_DIR_NAME
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -213,7 +214,7 @@ class AppConfig(BaseModel):
     )
     save_recordings_for_testing: bool = Field(
         default=False,
-        description="Save each dictation's audio + transcripts to %APPDATA%\\Wisperno\\recordings for "
+        description="Save each dictation's audio + transcripts to %APPDATA%\\WispernoPro\\recordings for "
                     "building a personal test set (scripts/eval_dictation.py). Off by default - audio only "
                     "touches disk while this is on.",
     )

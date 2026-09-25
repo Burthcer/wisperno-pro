@@ -1,5 +1,5 @@
 """
-Generates Wisperno's app icon: a hand-authored SVG source (assets/icon.svg)
+Generates Wisperno Pro's app icon: a hand-authored SVG source (assets/icon.svg)
 rasterized via Qt's own QtSvg renderer (already a PySide6 dependency - no new
 package needed) at each target resolution, then packed into a real
 multi-resolution .ico container.
@@ -24,6 +24,9 @@ sys.path.insert(0, str(BASE_DIR))
 
 ICON_SIZES = [16, 32, 48, 64, 128, 256]
 
+# Wisperno Pro: the original's purple "W" mark, with a gold ring and a gold
+# "PRO" badge so the two apps are easy to tell apart on the taskbar and in
+# the Start Menu (the ring alone still reads at 16px, where text can't).
 SVG_SOURCE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
     <linearGradient id="mark" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -31,14 +34,20 @@ SVG_SOURCE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
       <stop offset="55%" stop-color="#6366F1"/>
       <stop offset="100%" stop-color="#A855F7"/>
     </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
   </defs>
-  <circle cx="128" cy="128" r="122" fill="#12121A"/>
-  <circle cx="128" cy="128" r="122" fill="none" stroke="url(#mark)" stroke-width="3" opacity="0.5"/>
-  <path d="M 66 74 L 96 178 L 128 104 L 160 178 L 190 74"
+  <circle cx="128" cy="128" r="120" fill="#12121A"/>
+  <circle cx="128" cy="128" r="120" fill="none" stroke="url(#gold)" stroke-width="8"/>
+  <path d="M 66 70 L 96 170 L 128 98 L 160 170 L 190 70"
         fill="none" stroke="url(#mark)" stroke-width="17"
         stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 200 46 L 204 56 L 214 60 L 204 64 L 200 74 L 196 64 L 186 60 L 196 56 Z" fill="url(#mark)"/>
-  <path d="M 54 182 L 57 189 L 64 192 L 57 195 L 54 202 L 51 195 L 44 192 L 51 189 Z" fill="url(#mark)"/>
+  <path d="M 200 42 L 204 52 L 214 56 L 204 60 L 200 70 L 196 60 L 186 56 L 196 52 Z" fill="url(#mark)"/>
+  <rect x="70" y="182" width="116" height="46" rx="23" fill="url(#gold)"/>
+  <text x="128" y="216" text-anchor="middle" font-family="Arial, Helvetica, DejaVu Sans, sans-serif"
+        font-size="34" font-weight="bold" fill="#12121A" letter-spacing="3">PRO</text>
 </svg>
 """
 

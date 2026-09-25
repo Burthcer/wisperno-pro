@@ -1,4 +1,11 @@
-# Installing Wisperno
+# Installing Wisperno Pro
+
+Wisperno Pro is a separate app from the original Wisperno: it has its own
+installer identity, install folder (`%LOCALAPPDATA%\Programs\Wisperno Pro`),
+settings/history folder (`%APPDATA%\WispernoPro`) and icon, so it installs
+alongside Wisperno without changing or replacing it. Don't run both at the
+same time with the same hotkeys - Wisperno Pro warns you at startup if the
+original is running.
 
 ## Why no `.exe` here
 
@@ -25,8 +32,8 @@ want a standalone portable folder like the one this project ships day-to-day.
 ## 2. Run from source
 
 ```
-git clone https://github.com/Burthcer/Wisperno.git
-cd Wisperno
+git clone https://github.com/Burthcer/wisperno-pro.git
+cd wisperno-pro
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 python download_models.py
@@ -55,6 +62,18 @@ to a machine without a Python install. `scripts/package_portable.py` and
 `scripts/package_git_release.py` handle staging that output for distribution;
 `installer/setup.iss` builds a Windows installer via Inno Setup.
 
+To build the installer (`Final App\WispernoPro-Setup-v<version>.exe` plus
+its numbered `.bin` volumes - keep them together in one folder, Setup reads
+the volumes from beside the exe):
+
+```
+.venv\Scripts\python download_models.py
+.venv\Scripts\python build_exe.py
+.venv\Scripts\python scripts\build_installer.py
+```
+
+`build_installer.py` installs Inno Setup 6 via winget if it's missing.
+
 ## 4. CPU-only fallback (no compatible GPU)
 
 If Wisperno detects no CUDA-capable GPU (or under ~2GB VRAM), it
@@ -65,4 +84,5 @@ A toast on the floating pill confirms when this happens.
 ## Uninstalling
 
 Delete the folder and your `.venv`. Your dictation history/dictionary/
-settings live in `%APPDATA%\Wisperno\` - delete that too for a full removal.
+settings live in `%APPDATA%\WispernoPro\` - delete that too for a full removal.
+An installed Wisperno Pro uninstalls from Settings -> Apps like any other app.

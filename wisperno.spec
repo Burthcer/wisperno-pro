@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller build spec for Wisperno.
+PyInstaller build spec for Wisperno Pro.
 
-Produces a --onedir bundle (Wisperno.exe + a dist folder of DLLs/assets) rather
+Produces a --onedir bundle (WispernoPro.exe + a dist folder of DLLs/assets) rather
 than --onefile: --onefile re-extracts its entire payload to a temp dir on every
 launch, which is a poor fit for a multi-GB CUDA/torch/ctranslate2 dependency tree.
 
@@ -86,7 +86,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Wisperno",
+    name="WispernoPro",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -107,5 +107,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="Wisperno",
+    name="WispernoPro",
 )

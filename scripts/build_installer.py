@@ -1,5 +1,5 @@
 """
-Compiles installer/setup.iss into Final App/Wisperno-Setup-v{VERSION}.exe via
+Compiles installer/setup.iss into Final App/WispernoPro-Setup-v{VERSION}.exe via
 Inno Setup's command-line compiler (ISCC.exe).
 
 Requires `python build_exe.py` to have already produced Final App/v{VERSION}/
@@ -93,7 +93,7 @@ def main() -> None:
     print(f"Using Inno Setup compiler: {iscc}")
 
     print("=" * 70)
-    print(f" Compiling Wisperno-Setup-v{__version__}.exe")
+    print(f" Compiling WispernoPro-Setup-v{__version__}.exe")
     print("=" * 70)
     result = subprocess.run(
         [iscc, f"/DMyAppVersion={__version__}", f"/DSourceDir={staging_dir}", str(BASE_DIR / "installer" / "setup.iss")],
@@ -103,15 +103,15 @@ def main() -> None:
         print("\nInno Setup compilation FAILED. See output above.")
         sys.exit(result.returncode)
 
-    setup_exe = BASE_DIR / "Final App" / f"Wisperno-Setup-v{__version__}.exe"
+    setup_exe = BASE_DIR / "Final App" / f"WispernoPro-Setup-v{__version__}.exe"
     if not setup_exe.exists():
         print(f"\n[ERROR] Compiler reported success but '{setup_exe}' was not found.")
         sys.exit(1)
 
     # Disk spanning (see setup.iss) puts the actual payload in sibling
-    # Wisperno-Setup-v{VERSION}-N.bin volume(s), not the launcher exe itself -
+    # WispernoPro-Setup-v{VERSION}-N.bin volume(s), not the launcher exe itself -
     # both must ship together, so total size is measured across all of them.
-    volumes = [setup_exe] + sorted(setup_exe.parent.glob(f"Wisperno-Setup-v{__version__}-*.bin"))
+    volumes = [setup_exe] + sorted(setup_exe.parent.glob(f"WispernoPro-Setup-v{__version__}-*.bin"))
     total_gb = sum(f.stat().st_size for f in volumes) / 1e9
 
     print("Cleaning up the staging directory...")

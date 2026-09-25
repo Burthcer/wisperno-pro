@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui import theme
+from src.branding import APP_NAME
 
 MODE_LABELS = {
     "polish": "Polish", "prompt_engineer": "Prompt Engineer", "bullets": "Bullets",
@@ -382,4 +383,4 @@ class HistoryTab(QWidget):
     def _add_to_dictionary(self, raw_text: str) -> None:
         word = raw_text.strip().split(" ")[0] if raw_text.strip() else ""
         self.engine.vocabulary.add_entry(word, word, category="Name")
-        QMessageBox.information(self, "Wisperno", f"Added '{word}' to the dictionary. Edit it in the Dictionary tab.")
+        QMessageBox.information(self, APP_NAME, f"Added '{word}' to the dictionary. Edit it in the Dictionary tab.")

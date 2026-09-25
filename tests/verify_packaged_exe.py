@@ -1,5 +1,5 @@
 """
-Standalone verification for the packaged Wisperno.exe (Final App/v{VERSION}/).
+Standalone verification for the packaged WispernoPro.exe (Final App/v{VERSION}/).
 Launches the real .exe, confirms it survives startup without crashing, confirms
 it writes clean startup logs to logs/wisperno.log (this is also indirect proof
 the noconsole-loguru crash is fixed - a crash there would leave the log empty
@@ -18,7 +18,7 @@ sys.path.insert(0, str(BASE_DIR))
 from src.__version__ import __version__  # noqa: E402
 
 VERSION_DIR = BASE_DIR / "Final App" / f"v{__version__}"
-EXE_PATH = VERSION_DIR / "Wisperno.exe"
+EXE_PATH = VERSION_DIR / "WispernoPro.exe"
 LOG_PATH = VERSION_DIR / "logs" / "wisperno.log"
 
 STARTUP_WAIT_SEC = 5

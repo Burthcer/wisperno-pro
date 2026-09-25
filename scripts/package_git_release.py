@@ -40,7 +40,7 @@ preset isn't a good first-run experience. Get the weights one of two ways:
 From this folder:
 
 ```
-Wisperno.exe
+WispernoPro.exe
 ```
 
 On first launch with an empty `models/`, Wisperno logs a warning and falls
@@ -157,7 +157,7 @@ nothing is spoken - a separate "Polish Selected Text" shortcut isn't needed.
 See [INSTALL.md](INSTALL.md) for full setup steps. Short version:
 
 ```
-Wisperno.exe
+WispernoPro.exe
 ```
 
 First launch takes ~20-30s while Windows SmartScreen scans the new,
@@ -203,13 +203,13 @@ characters; a normal folder name is safest.
 
 This distribution ships WITHOUT model weights to keep the download small -
 see `models/MODELS.md` for exactly what to fetch and where to put it, or
-just launch `Wisperno.exe` once and read the log's warning if you skip this
+just launch `WispernoPro.exe` once and read the log's warning if you skip this
 step (dictation still works without an LLM, just without AI polish/cleanup).
 
 ## 4. Run it
 
 ```
-Wisperno.exe
+WispernoPro.exe
 ```
 
 A small pill indicator appears near the bottom of your screen once ready
@@ -309,7 +309,7 @@ def stage_release() -> Path:
         shutil.rmtree(RELEASE_DIR)
     RELEASE_DIR.mkdir(parents=True)
 
-    print("Copying Wisperno.exe + PyInstaller runtime dependencies...")
+    print("Copying WispernoPro.exe + PyInstaller runtime dependencies...")
     _copy_exe_and_runtime(RELEASE_DIR)
     # build_exe.py's generic README.txt is superseded by this script's own
     # README.md/INSTALL.md below - drop it so the release folder doesn't ship two.

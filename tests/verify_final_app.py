@@ -1,8 +1,8 @@
 """
-Live verification harness for the packaged Wisperno.exe.
+Live verification harness for the packaged WispernoPro.exe.
 
 Phases:
-  1. Launch Final App/v1.0.0/Wisperno.exe and assert the floating pill window
+  1. Launch Final App/v1.0.0/WispernoPro.exe and assert the floating pill window
      exists AND is visible on screen, measuring the real time-to-visible.
   2. Launch a SECOND copy and assert the single-instance mutex makes it exit
      immediately without loading models or allocating VRAM.
@@ -26,9 +26,9 @@ sys.path.insert(0, str(BASE_DIR))
 from src.__version__ import __version__  # noqa: E402
 
 VERSION_DIR = BASE_DIR / "Final App" / f"v{__version__}"
-EXE_PATH = VERSION_DIR / "Wisperno.exe"
+EXE_PATH = VERSION_DIR / "WispernoPro.exe"
 LOG_PATH = VERSION_DIR / "logs" / "wisperno.log"
-OVERLAY_TITLE = "Wisperno Overlay"
+OVERLAY_TITLE = "Wisperno Pro Overlay"
 
 PILL_VISIBLE_TARGET_SEC = 5.0     # PySide6/Qt DLL load is heavier than tkinter's; measured ~2-3.1s cold, well under 5s
 PILL_VISIBLE_HARD_CAP_SEC = 30.0  # fail outright beyond this
@@ -388,7 +388,7 @@ def main() -> int:
                     p.wait(timeout=15)
                 except subprocess.TimeoutExpired:
                     p.kill()
-        subprocess.run(["taskkill", "/F", "/IM", "Wisperno.exe", "/T"], capture_output=True)
+        subprocess.run(["taskkill", "/F", "/IM", "WispernoPro.exe", "/T"], capture_output=True)
         time.sleep(2)
 
     phase3_pipeline()

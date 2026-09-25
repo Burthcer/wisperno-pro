@@ -11,7 +11,7 @@ Requires `python build_exe.py` to have already produced Final App/v{VERSION}/
 - this script does not invoke PyInstaller itself, it repackages that output.
 
 Usage: python scripts/package_portable.py [--no-zip]
-    --no-zip    Assemble Final App/Wisperno-Portable/ only, skip the .zip
+    --no-zip    Assemble Final App/WispernoPro-Portable/ only, skip the .zip
                 (the folder alone is directly runnable - useful while
                 iterating, since the zip step is the slow part on multi-GB
                 model weights).
@@ -31,8 +31,8 @@ from src.config import load_config  # noqa: E402
 FINAL_APP_DIR = BASE_DIR / "Final App"
 BUILT_VERSION_DIR = FINAL_APP_DIR / f"v{__version__}"
 BUILT_CONFIG_PATH = BUILT_VERSION_DIR / "config" / "config.yaml"
-PORTABLE_DIR = FINAL_APP_DIR / "Wisperno-Portable"
-PORTABLE_ZIP = FINAL_APP_DIR / f"Wisperno-v{__version__}-Portable.zip"
+PORTABLE_DIR = FINAL_APP_DIR / "WispernoPro-Portable"
+PORTABLE_ZIP = FINAL_APP_DIR / f"WispernoPro-v{__version__}-Portable.zip"
 
 # faster-whisper's own HuggingFace-cache-style layout under models/ (see
 # src/transcriber.py's download_root) - copied whole; shutil.copytree's
@@ -130,7 +130,7 @@ def build_portable_bundle() -> Path:
         shutil.rmtree(PORTABLE_DIR)
     PORTABLE_DIR.mkdir(parents=True)
 
-    print("Copying Wisperno.exe + PyInstaller runtime dependencies...")
+    print("Copying WispernoPro.exe + PyInstaller runtime dependencies...")
     _copy_exe_and_runtime(PORTABLE_DIR)
 
     print("Copying model weights (Whisper + the currently active LLM preset only)...")
@@ -169,7 +169,7 @@ def zip_bundle(source_dir: Path) -> Path:
 def main() -> None:
     skip_zip = "--no-zip" in sys.argv
     print("=" * 70)
-    print(f" Packaging Wisperno v{__version__} Portable Bundle")
+    print(f" Packaging Wisperno Pro v{__version__} Portable Bundle")
     print("=" * 70)
 
     bundle_dir = build_portable_bundle()
