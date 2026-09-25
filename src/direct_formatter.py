@@ -51,6 +51,26 @@ _BARE_COMMAND_RE = re.compile(r"^/[\w\-]+$")
 LOWERCASE_I_RE = re.compile(r"\bi\b")
 
 
+# What the LLM polish is actually for: filler, self-corrections, hedges and
+# restarts. A short utterance with none of these ("sounds good, see you at
+# 3") gains nothing from a ~0.3-1s LLM round trip.
+LLM_SKIP_MAX_WORDS = 12
+_NEEDS_LLM_RE = re.compile(
+    r"\b(?:um+|uh+|er|ah+|hmm+|mm+|you know|i mean|sort of|kind of|wait|actually|scratch that|"
+    r"no no|sorry|or rather|let me rephrase|never mind|rather)\b|\blike,",
+    re.IGNORECASE,
+)
+
+
+def is_short_and_clean(text: str) -> bool:
+    """True if `text` is short and has nothing the LLM polish would fix beyond
+    what format_direct() already does - so dictation can skip the LLM."""
+    words = text.split()
+    if not words or len(words) > LLM_SKIP_MAX_WORDS:
+        return False
+    return not _NEEDS_LLM_RE.search(text) and not _STUTTER_RE.search(text)
+
+
 def capitalize_pronoun_i(text: str) -> str:
     return LOWERCASE_I_RE.sub("I", text)
 

@@ -25,7 +25,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from loguru import logger
 
 from src.audio_recorder import AudioRecorder
-from src.direct_formatter import format_direct
+from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
 from src.swear_filter import apply_profanity_filter
@@ -188,8 +188,12 @@ class InferenceWorker(QThread):
             if normalized in self.snippets:
                 final_text = self.snippets[normalized]
                 logger.info(f"Snippet matched '{normalized}' -> bypassing formatting.")
-            elif self.use_direct_formatter:
-                # Mode 1: instant, zero-LLM rule-based cleanup (see src/direct_formatter.py).
+            elif self.use_direct_formatter or (self.mode == "polish" and is_short_and_clean(raw_text)):
+                # Mode 1: instant, zero-LLM rule-based cleanup (see src/direct_formatter.py) -
+                # also used for Polish when the utterance is short and has no filler/corrections,
+                # where the LLM would only add latency.
+                if not self.use_direct_formatter:
+                    logger.info("[POLISH] Short, already-clean utterance - skipped the LLM.")
                 profanity_mode = getattr(self.transformer, "profanity_filter", "allow")
                 final_text = apply_profanity_filter(format_direct(raw_text), profanity_mode)
             elif self.system_prompt:

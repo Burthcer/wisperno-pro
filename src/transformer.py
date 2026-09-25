@@ -55,7 +55,7 @@ from typing import List
 
 from llama_cpp import Llama
 from src.config import LLMConfig, get_base_dir
-from src.direct_formatter import capitalize_pronoun_i, normalize_punctuation_spacing, _cap_sentences
+from src.direct_formatter import capitalize_pronoun_i, format_direct, normalize_punctuation_spacing, _cap_sentences
 from src.list_formatter import format_lists_in_text
 from src.swear_filter import apply_profanity_filter, profanity_was_censored
 
@@ -64,6 +64,9 @@ from src.swear_filter import apply_profanity_filter, profanity_was_censored
 # dictation plus a system prompt plus generation budget can approach that
 # ceiling - chunking keeps each call well inside it regardless of session length.
 LONG_FORM_WORD_THRESHOLD = 400
+# Dictionary terms listed in the prompt (see Transformer._with_vocabulary) -
+# capped so a huge dictionary can't crowd the context window.
+MAX_PROMPT_TERMS = 100
 CHUNK_WORD_TARGET = 400
 
 # Guardrail: prefixes that mean the model drifted into conversational-assistant
@@ -144,6 +147,15 @@ QUESTION_STARTERS = (
     "is ", "are ", "do ", "does ", "did ", "can ", "could ", "would ", "will ", "should ",
     "have ", "has ",
 )
+
+# Spoken lead-ins that hide a question's first word ("um so can you ...") -
+# skipped before checking QUESTION_STARTERS.
+_LEADING_FILLER_RE = re.compile(r"^(?:(?:um+|uh+|er|ah+|so|okay|ok|well|like|and|hey)\b[\s,.]*)+", re.IGNORECASE)
+
+
+def _is_question(text: str) -> bool:
+    return _LEADING_FILLER_RE.sub("", text.strip().lower()).startswith(QUESTION_STARTERS)
+
 
 _CONTRACTION_EXPANSIONS = (
     ("i'm", "i am"), ("here's", "here is"), ("it's", "it is"), ("that's", "that is"),
@@ -262,7 +274,7 @@ def sanity_check(raw: str, output: str, mode: str = "polish", profanity_filter: 
         return f"essay-length over-generation ({len(output.split())} words from a {len(raw_words)}-word input)"
 
     # Answered-instead-of-cleaned check - see QUESTION_STARTERS's comment.
-    if lowered_raw.startswith(QUESTION_STARTERS) and not any(m in lowered_raw for m in SELF_CORRECTION_MARKERS):
+    if _is_question(lowered_raw) and not any(m in lowered_raw for m in SELF_CORRECTION_MARKERS):
         if "?" not in output:
             return "question was answered instead of cleaned (no '?' anywhere in output)"
 
@@ -295,6 +307,21 @@ def basic_capitalize(text: str) -> str:
     return capitalize_pronoun_i(capitalized)
 
 
+def fallback_format(text: str) -> str:
+    """What gets pasted when the LLM can't be used for an utterance (its output
+    failed a guardrail, it raised, or no model is loaded): the same instant
+    rule-based cleanup as normal dictation - fillers and stutters removed,
+    spoken lists formatted, capitalization and punctuation fixed - rather than
+    the bare capitalized transcript basic_capitalize() gives, which kept every
+    "um". A dictated question still ends in "?"."""
+    result = format_direct(text)
+    if (result.endswith(".") and "\n" not in result
+            and _is_question(normalize_punctuation_spacing(text))
+            and not re.search(r"[.!?]\s", result)):
+        result = result[:-1] + "?"
+    return result
+
+
 class Transformer:
     """
     Contextual text transformation engine using local GGUF models on CUDA.
@@ -302,10 +329,13 @@ class Transformer:
 
     def __init__(
         self, config: Optional[LLMConfig] = None, prompts: Optional[Dict[str, str]] = None,
-        profanity_filter: str = "allow",
+        profanity_filter: str = "allow", vocabulary=None,
     ):
         self.config = config or LLMConfig()
         self.prompts = prompts or {}
+        # The user's dictionary (src/vocabulary.py): its spellings are given to
+        # the model and restored afterwards, so polish never "corrects" them.
+        self.vocabulary = vocabulary
         self.active_model_name: Optional[str] = None
         self.active_model_layers: Optional[int] = None
         self.last_fallback_applied = False  # set by _transform_chunk; read by workers.py to warn the user
@@ -481,9 +511,21 @@ class Transformer:
             chunks.append(" ".join(current))
         return chunks
 
+    def _with_vocabulary(self, system_prompt: str) -> str:
+        """Appended (not prepended) so the long, fixed part of the prompt stays
+        an identical prefix across calls and llama.cpp can reuse its cache."""
+        terms = self.vocabulary.canonical_terms()[:MAX_PROMPT_TERMS] if self.vocabulary else []
+        if not terms:
+            return system_prompt
+        return (
+            f"{system_prompt}\n\nSPELLINGS: the user's own dictionary. Whenever one of these words or names "
+            f"appears, spell and capitalize it exactly like this: {', '.join(terms)}."
+        )
+
     def _transform_chunk(self, text: str, mode: str, system_prompt: str) -> str:
         """Run a single LLM call on one chunk (already known to fit the context window)."""
         t0 = time.perf_counter()
+        system_prompt = self._with_vocabulary(system_prompt)
         try:
             # Dynamic ceiling scaled to input length, not a flat 4096: without a
             # tight cap and explicit stop tokens, a chunk that doesn't hit a
@@ -571,14 +613,16 @@ class Transformer:
                     f"[FALLBACK_DEBUG] Reason: conversational drift prefix '{drift_prefix}' | "
                     f"Raw: {text!r} | Output: {result!r}"
                 )
-                result = basic_capitalize(text.strip())
+                result = fallback_format(text.strip())
                 self.last_fallback_applied = True
             else:
                 reason = sanity_check(text, result, mode=mode, profanity_filter=self.profanity_filter)
                 if reason:
                     logger.warning(f"[FALLBACK_DEBUG] Reason: {reason} | Raw: {text!r} | Output: {result!r}")
-                    result = basic_capitalize(text.strip())
+                    result = fallback_format(text.strip())
                     self.last_fallback_applied = True
+            if self.vocabulary:
+                result = self.vocabulary.restore_term_casing(result)
             if mode == "polish":
                 # Deterministic backstop for the prompt's LISTS rule: whatever
                 # the model did, spoken enumerations that survived as prose
@@ -596,9 +640,9 @@ class Transformer:
                 logger.warning(f"[POLISH] LLM output identical to (or empty vs.) raw input for mode '{mode}'.")
             return result
         except Exception as e:
-            logger.error(f"Error during LLM transformation: {e}. Falling back to raw text for this chunk.")
+            logger.error(f"Error during LLM transformation: {e}. Falling back to the instant formatter for this chunk.")
             self.last_fallback_applied = True
-            return basic_capitalize(text.strip())
+            return fallback_format(text.strip())
 
     def transform(self, raw_text: str, mode: str = "polish") -> str:
         """

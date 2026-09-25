@@ -61,6 +61,26 @@ class Vocabulary:
             text = re.sub(pattern, entry["replacement"], text, flags=flags)
         return text
 
+    def canonical_terms(self) -> List[str]:
+        """Unique dictionary spellings (the replacement side), in load order."""
+        terms: List[str] = []
+        for entry in self.entries:
+            if entry["replacement"] not in terms:
+                terms.append(entry["replacement"])
+        return terms
+
+    def restore_term_casing(self, text: str) -> str:
+        """Put dictionary terms back in their exact spelling when a later step
+        (the LLM polish, usually) re-cased them - "Github" -> "GitHub",
+        "claude code" -> "Claude Code". All-lowercase terms are skipped, so
+        this never lowercases a sentence-initial capital."""
+        for term in self.canonical_terms():
+            if term == term.lower():
+                continue
+            pattern = r"(?<!\w)" + re.escape(term) + r"(?!\w)"
+            text = re.sub(pattern, lambda m: term, text, flags=re.IGNORECASE)
+        return text
+
     def build_initial_prompt(self, base_prompt: str) -> str:
         """Append canonical dictionary terms to Whisper's initial_prompt for keyword biasing."""
         if not self.entries:

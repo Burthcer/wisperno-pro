@@ -222,7 +222,7 @@ class WispernoEngine(QObject):
             logger.info("Initializing local SLM transform engine...")
             self.transformer = Transformer(
                 config=self.config.llm, prompts=self.config.prompts,
-                profanity_filter=self.config.profanity_filter,
+                profanity_filter=self.config.profanity_filter, vocabulary=self.vocabulary,
             )
 
             system_monitor.mark_models_loaded()

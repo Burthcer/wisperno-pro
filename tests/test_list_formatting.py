@@ -51,6 +51,7 @@ def _fake_transformer(model_output: str):
     transformer.prompts = config.prompts
     transformer.profanity_filter = "allow"
     transformer.last_fallback_applied = False
+    transformer.vocabulary = None
     transformer.llm = mock.Mock()
     transformer.llm.create_chat_completion.return_value = {"choices": [{"message": {"content": model_output}}]}
     return transformer

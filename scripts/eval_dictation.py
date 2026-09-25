@@ -41,10 +41,12 @@ from src.eval_metrics import exact_match, normalize_words, text_similarity, word
 TEXT_CASES_PATH = BASE_DIR / "tests" / "fixtures" / "formatting_cases.json"
 
 
-def _load_transformer(config):
+def _load_transformer(config, vocabulary=None):
     from src.transformer import Transformer
 
-    transformer = Transformer(config=config.llm, prompts=config.prompts, profanity_filter=config.profanity_filter)
+    transformer = Transformer(
+        config=config.llm, prompts=config.prompts, profanity_filter=config.profanity_filter, vocabulary=vocabulary,
+    )
     if transformer.llm is None:
         sys.exit(f"LLM model not found ({config.llm.model_path}) - run without --llm or download it first.")
     return transformer
@@ -104,10 +106,10 @@ def run_recordings(args, config) -> dict:
         )
     print(f"{len(scored)} scored clip(s) in {folder} ({len(clips) - len(scored)} without a .txt skipped)\n")
 
-    db = WispernoDB(get_db_path())
-    transcriber = Transcriber(config=config.whisper, vocabulary=Vocabulary(db=db))
+    vocabulary = Vocabulary(db=WispernoDB(get_db_path()))
+    transcriber = Transcriber(config=config.whisper, vocabulary=vocabulary)
     transcriber.transcribe(read_wav(scored[0])[:SAMPLE_RATE])  # warm-up: GPU init shouldn't count against clip 1
-    transformer = _load_transformer(config) if args.llm else None
+    transformer = _load_transformer(config, vocabulary) if args.llm else None
     mode = config.active_mode
 
     rows = []
