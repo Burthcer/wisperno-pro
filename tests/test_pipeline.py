@@ -108,10 +108,10 @@ def test_floating_pill_rendering():
     pill.set_state(STATE_IDLE)
     app.processEvents()
     img = pill.grab().toImage().convertToFormat(QImage.Format.Format_ARGB32)
-    corner = img.pixelColor(2, 2)
+    corner = img.pixelColor(0, 0)  # the idle capsule is 14px tall now, so (2, 2) is already on its curve
     center = img.pixelColor(img.width() // 2, img.height() // 2)
     assert corner.alpha() == 0, "pill corners must be transparent (rounded capsule, not a square)"
-    assert center.alpha() == 255 and (center.red(), center.green(), center.blue()) != (0, 0, 0)
+    assert center.alpha() >= 200 and (center.red(), center.green(), center.blue()) != (0, 0, 0)  # PILL_BG_ALPHA is 0.94
 
     pill.set_state(STATE_RECORDING)
     pill.set_mode("PROMPT_ENGINEER")
