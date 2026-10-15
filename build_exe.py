@@ -117,6 +117,10 @@ def assemble_final_app() -> Path:
             if icon.is_file():
                 shutil.copy2(icon, icons_dir / icon.name)
 
+    src_fonts = BASE_DIR / "assets" / "fonts"
+    if src_fonts.exists():
+        shutil.copytree(src_fonts, version_dir / "assets" / "fonts", dirs_exist_ok=True)
+
     (version_dir / "logs").mkdir(exist_ok=True)
 
     init_database(version_dir)  # seeds %APPDATA%\WispernoPro\wisperno.db, not version_dir - see docstring

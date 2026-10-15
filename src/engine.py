@@ -83,6 +83,7 @@ class WispernoEngine(QObject):
         self.config: AppConfig = load_config(config_path)
         self.active_mode: str = self.config.active_mode
         self._engines_ready = False
+        self._pill_recording = False  # True while a dictation started from the pill's click is recording
         self._processing = False
         self._ptt_press_time = 0.0
         self._active_transform_id: Optional[str] = None  # set by a per-transform hotkey press, read at release
@@ -337,6 +338,12 @@ class WispernoEngine(QObject):
         return self.config.auto_llm_polish and not getattr(self, "_cpu_compat_mode", False)
 
     def _on_ptt_press(self) -> None:
+        if getattr(self, "_pill_recording", False) and self.audio_worker.recorder.is_recording:
+            # The pill started this recording, so the toggle hotkey is the
+            # matching "stop" (the hotkey manager just flipped its own state
+            # to "recording" - pill_finish_dictation resets it).
+            self.pill_finish_dictation()
+            return
         if not self._engines_ready or self._processing or self._live_worker is not None or self._is_releasing():
             return
         self._ptt_press_time = time.perf_counter()
@@ -385,6 +392,7 @@ class WispernoEngine(QObject):
 
     def _on_mic_failed(self, reason: str) -> None:
         logger.error(f"[MIC] {reason} - dictation cancelled. Check the microphone in Settings -> General.")
+        self._pill_recording = False
         self._active_transform_id = None
         if self.hotkey_worker:
             self.hotkey_worker.manager.force_stop_active_recording()
@@ -396,6 +404,7 @@ class WispernoEngine(QObject):
         self._after_post_roll(self._finish_ptt_release)
 
     def _finish_ptt_release(self) -> None:
+        self._pill_recording = False
         audio_array = self.audio_worker.stop_recording()
         if self.config.audio_cues_enabled:
             audio_cues.play_stop_cue()  # after the mic closed, so the beep isn't recorded
@@ -452,6 +461,56 @@ class WispernoEngine(QObject):
             self._on_transform_release(self._active_transform_id)
         else:
             self._on_ptt_release()
+
+    # --- Pill-driven dictation (click / check / x on the floating pill) -------
+    # Same pipeline as the hotkeys, no key involved. The mic still opens only
+    # when a dictation starts and closes when it ends.
+
+    def pill_toggle_dictation(self) -> None:
+        """The pill was clicked: start a dictation - or finish the one in progress."""
+        recorder = self.audio_worker.recorder if self.audio_worker else None
+        if recorder is None:
+            return
+        if recorder.is_recording:
+            self.pill_finish_dictation()
+            return
+        self._pill_recording = True
+        self._on_ptt_press()
+        if not recorder.is_recording:
+            self._pill_recording = False  # the press was ignored (engines loading, busy, mic failed)
+
+    def pill_finish_dictation(self) -> None:
+        """The pill's check (or a hotkey tap): stop and type what was said."""
+        if not self._engines_ready or not self.audio_worker.recorder.is_recording or self._is_releasing():
+            return
+        logger.info("[PILL] Finish - committing dictation.")
+        if self.hotkey_worker:
+            self.hotkey_worker.manager.force_stop_active_recording()
+        if self._active_transform_id is not None:
+            self._on_transform_release(self._active_transform_id)
+        else:
+            self._on_ptt_release()
+
+    def pill_cancel_dictation(self) -> None:
+        """The pill's x: stop recording and throw the audio away - nothing is typed."""
+        recorder = self.audio_worker.recorder if self.audio_worker else None
+        if recorder is None or not recorder.is_recording or self._is_releasing():
+            return
+        logger.info("[PILL] Cancel - recording discarded.")
+        self._pill_recording = False
+        self._active_transform_id = None
+        if self.hotkey_worker:
+            self.hotkey_worker.manager.force_stop_active_recording()
+        self.audio_worker.stop_recording()
+        self.state_changed.emit("idle")
+
+    def set_pill_click_action(self, action: str) -> None:
+        self.config.pill_click_action = action
+        self.save_config()
+
+    def set_pill_position(self, x: Optional[int], y: Optional[int]) -> None:
+        self.config.pill_position = None if x is None or y is None else [int(x), int(y)]
+        self.save_config()
 
     def _on_transform_press(self, transform_id: str) -> None:
         """A per-transform hotkey (e.g. Alt+X) was pressed - same as the main PTT press, just tagged."""

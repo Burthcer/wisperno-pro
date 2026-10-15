@@ -1,18 +1,28 @@
 """
-Qt Floating Pill Widget for Wisperno.
+Qt Floating Pill widget.
 
-Uses true per-pixel alpha compositing (WA_TranslucentBackground + a custom
-paintEvent drawing an anti-aliased rounded capsule) instead of a tkinter Canvas,
-which can only fake rounded corners with arcs/rectangles on an opaque background
-and shows visible square-corner artifacts. Frameless, always-on-top, and
-excluded from the taskbar/alt-tab via Qt.WindowType.Tool.
+A small, always-on-top capsule drawn with true per-pixel alpha
+(WA_TranslucentBackground + a custom paintEvent). It stays tiny:
+
+  idle         a thin capsule of faint bars (grows a little on hover)
+  recording    [x]  live scrolling waveform from the real mic level  [check]
+  processing   animated dots (+ the name of a Transforms run, if any)
+  toasts       one short line (mode change, warnings, errors)
+
+The mic is never open while the pill is idle: "recording" is only painted once
+real audio has arrived (see engine._on_mic_live) and "mic_starting" before that.
+
+Interaction: drag it anywhere (the spot is remembered), click it to start a
+dictation (or open the dashboard / do nothing - Settings -> General), and while
+recording the x cancels (nothing is typed) and the check finishes.
 """
 
-import time
-from typing import Optional
+import math
+from collections import deque
+from typing import Optional, Sequence
 
-from PySide6.QtCore import Qt, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Property, Signal
-from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPainterPath, QGuiApplication, QCursor, QLinearGradient
+from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, QPoint, Signal
+from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPainterPath, QGuiApplication, QPen
 from PySide6.QtWidgets import QWidget, QMenu
 
 from src.ui import theme
@@ -32,44 +42,78 @@ STATE_FALLBACK_WARNING = "fallback_warning"
 STATE_CPU_MODE = "cpu_mode"
 STATE_NO_SELECTION = "no_selection"
 STATE_ENGINE_FALLBACK = "engine_fallback"
-# Key pressed, mic still opening - "wait". Becomes STATE_RECORDING ("speak
-# now") only once real audio arrives from the device.
+# Key pressed (or pill clicked), mic still opening - "wait". Becomes
+# STATE_RECORDING ("speak now") only once real audio arrives from the device.
 STATE_MIC_STARTING = "mic_starting"
 STATE_MIC_ERROR = "mic_error"
 
-DORMANT_W = 220
-RECORDING_W = 320
-PROCESSING_W = 260
-TYPING_W = 200
-SUCCESS_W = 260
-ERROR_W = 300
-SELECTION_PROCESSING_W = 300
-FALLBACK_WARNING_W = 320
-CPU_MODE_W = 360
-NO_SELECTION_W = 300
-ENGINE_FALLBACK_W = 380
-MIC_ERROR_W = 340
-PILL_H = 34  # compact profile: half-height capsule radius (17px), 8px/4px h/v padding
-BOTTOM_OFFSET = 110
+CLICK_DICTATE = "dictate"
+CLICK_DASHBOARD = "dashboard"
+CLICK_NONE = "none"
 
-# Uniform horizontal margin every painted state lines its content up against -
-# content is centered inside the capsule by starting/ending at this same
-# distance from both edges, rather than each state carrying its own
-# hand-picked (and previously inconsistent - 14/16/18px) inset.
-CONTENT_MARGIN = 16
+PILL_H = 30                  # height while something is happening
+IDLE_W, IDLE_H = 46, 14      # at rest
+HOVER_W, HOVER_H = 64, 26    # under the cursor
+ACTIVE_W = 156               # [x] waveform [check]
+BUSY_W = 72                  # dots only
+SUCCESS_W = 60
+TOAST_MIN_W, TOAST_MAX_W = 120, 420
+BOTTOM_OFFSET = 110          # default spot: bottom centre, this far up
+DRAG_THRESHOLD_PX = 4
+WAVE_BARS = 22
+EDGE_PAD = 5                 # gap between the capsule edge and the x / check buttons
+
+# Toast text per state, painted in the state's own colour.
+_TOASTS = {
+    STATE_MIC_ERROR: "Microphone didn't start - check Settings",
+    STATE_ERROR: f"{APP_NAME} startup is stuck - see logs/wisperno.log",
+    STATE_FALLBACK_WARNING: "Formatting fallback applied",
+    STATE_CPU_MODE: "Running in CPU Compatibility Mode (no dedicated GPU)",
+    STATE_NO_SELECTION: "Highlight text to change style",
+    STATE_ENGINE_FALLBACK: "Old engine preset retired - switched to a supported one",
+}
+_TOAST_SECONDS = {
+    STATE_MIC_ERROR: 3.0, STATE_FALLBACK_WARNING: 2.5, STATE_CPU_MODE: 4.0,
+    STATE_NO_SELECTION: 2.0, STATE_ENGINE_FALLBACK: 4.0, STATE_MODE_CHANGED: 1.0,
+    # STATE_ERROR never auto-collapses: an init failure stays visible until
+    # fixed, rather than quietly reverting to a "ready" look that would be a lie.
+}
+
+
+def _font(point_size: float, weight: QFont.Weight = QFont.Weight.Normal, mono: bool = False) -> QFont:
+    families = [f.strip() for f in (theme.FONT_FAMILY_MONO if mono else theme.FONT_FAMILY).split(",")]
+    font = QFont(families[0])
+    font.setFamilies(families)
+    font.setPointSizeF(point_size)
+    font.setWeight(weight)
+    return font
 
 
 class FloatingPill(QWidget):
-    """Always-visible dormant "Ready" pill that expands for recording/processing/success."""
+    """The always-visible dictation pill."""
 
     dashboard_requested = Signal()
     cycle_mode_requested = Signal()
     hide_pill_requested = Signal()
-    close_requested = Signal()  # left to the controller: hide-to-tray vs full quit, per config
     quit_requested = Signal()
+    toggle_dictation_requested = Signal()   # click on the idle pill (when set to "dictate")
+    finish_dictation_requested = Signal()   # the check while recording
+    cancel_dictation_requested = Signal()   # the x while recording
+    position_changed = Signal(int, int)     # centre (x, y) after the user drags it
+    position_reset_requested = Signal()
 
-    def __init__(self, initial_mode: str = "POLISH", hotkey_label: str = "Ctrl+Alt", always_on_top: bool = True):
-        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
+    def __init__(
+        self,
+        initial_mode: str = "POLISH",
+        hotkey_label: str = "Ctrl+Alt",
+        always_on_top: bool = True,
+        click_action: str = CLICK_DICTATE,
+        position: Optional[Sequence[int]] = None,
+    ):
+        # WindowDoesNotAcceptFocus (WS_EX_NOACTIVATE): clicking/dragging the pill
+        # must never take the keyboard focus from the app being dictated into -
+        # the text is typed into whatever window was focused when you clicked.
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus
         if always_on_top:
             flags |= Qt.WindowType.WindowStaysOnTopHint
         super().__init__(None, flags)
@@ -77,30 +121,41 @@ class FloatingPill(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         # Hard ceiling independent of any width-computation code path: the pill
         # must never be able to stretch toward screen width.
-        self.setMaximumWidth(420)
-        self.setFixedHeight(PILL_H)
+        self.setMaximumWidth(TOAST_MAX_W)
         self.setWindowTitle(OVERLAY_WINDOW_TITLE)  # matched by src.single_instance to focus a running instance
         self.setWindowIcon(theme.get_app_icon())
-        self.setMouseTracking(True)  # needed for hover-to-reveal on the close button
-
-        self._close_btn_rect = QRectF()
-        self._hovering_close = False
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.current_mode = initial_mode.upper()
         self.hotkey_label = hotkey_label
+        self.click_action = click_action
         self.state = STATE_LOADING
-        # Set by _set_state() when a "processing" state arrives carrying a
-        # "processing:<Label>" suffix (see set_state's docstring) - lets a
-        # Transforms-hub-driven dictation show its own name ("Prompt
-        # Engineering...") instead of the generic "Polishing speech..." text.
+        # "processing:<Label>" names a Transforms run; "recording:<Label>" says
+        # what this recording will do (e.g. DIRECT = no LLM) - see set_state.
         self._status_label = ""
+
         self._smoothed_level = 0.0
-        self._levels = [0.0, 0.0, 0.0, 0.0]
-        self._recording_start = 0.0
+        self._levels = deque([0.0] * WAVE_BARS, maxlen=WAVE_BARS)
         self._pulse_phase = 0.0
-        self._progress_phase = 0.0
-        self._width_current = float(DORMANT_W)
-        self._width_target = float(DORMANT_W)
+        self._tick_count = 0
+        self._hover = False
+        self._cancel_rect = QRectF()
+        self._finish_rect = QRectF()
+        self._hover_cancel = False
+        self._hover_finish = False
+        self._press_global: Optional[QPoint] = None
+        self._press_anchor: Optional[QPointF] = None
+        self._dragging = False
+
+        self._anchor: Optional[QPointF] = None  # centre of the capsule; None = default spot
+        if position is not None and len(position) == 2:
+            self.set_position(position[0], position[1])
+
+        self._width_current = float(IDLE_W)
+        self._width_target = float(IDLE_W)
+        self._height_current = float(IDLE_H)
+        self._height_target = float(IDLE_H)
 
         self._anim_timer = QTimer(self)
         self._anim_timer.setInterval(16)  # ~60fps
@@ -110,30 +165,97 @@ class FloatingPill(QWidget):
         self._collapse_timer.setSingleShot(True)
         self._collapse_timer.timeout.connect(lambda: self._set_state(STATE_IDLE))
 
-        self.resize(DORMANT_W, PILL_H)
+        self._apply_size_targets()
+        self._width_current, self._height_current = self._width_target, self._height_target
+        self.resize(int(self._width_current), int(self._height_current))
+        self._update_tooltip()
         self._reposition()
         self.show()
         self._anim_timer.start()
 
     # --- Geometry ------------------------------------------------------------
 
-    def _reposition(self) -> None:
+    def _default_anchor(self) -> QPointF:
         screen = QGuiApplication.primaryScreen().geometry()
-        x = screen.x() + (screen.width() - self.width()) // 2
-        y = screen.y() + screen.height() - BOTTOM_OFFSET
-        self.move(x, y)
+        return QPointF(screen.x() + screen.width() / 2.0, screen.y() + screen.height() - BOTTOM_OFFSET + PILL_H / 2.0)
 
-    def _tick(self) -> None:
-        # Smoothly interpolate width toward target (drives the expand/collapse feel).
-        if abs(self._width_current - self._width_target) > 0.5:
-            self._width_current += (self._width_target - self._width_current) * 0.35
-            self.resize(int(self._width_current), PILL_H)
+    def _screen_geometry_at(self, point: QPointF):
+        screen = QGuiApplication.screenAt(point.toPoint()) or QGuiApplication.primaryScreen()
+        return screen.availableGeometry()
+
+    def _reposition(self) -> None:
+        """Keep the capsule centred on its anchor while it grows/shrinks, and
+        inside the visible screen area."""
+        anchor = self._anchor if self._anchor is not None else self._default_anchor()
+        geo = self._screen_geometry_at(anchor)
+        w, h = self.width(), self.height()
+        x = min(max(anchor.x() - w / 2.0, geo.left()), geo.right() - w + 1)
+        y = min(max(anchor.y() - h / 2.0, geo.top()), geo.bottom() - h + 1)
+        self.move(int(round(x)), int(round(y)))
+
+    def set_position(self, cx: int, cy: int) -> None:
+        """Restore a remembered spot - ignored if it is no longer on any screen
+        (a monitor was unplugged), which falls back to the default spot."""
+        point = QPointF(float(cx), float(cy))
+        if QGuiApplication.screenAt(point.toPoint()) is None:
+            self._anchor = None
+        else:
+            self._anchor = point
+        if hasattr(self, "_width_current"):
             self._reposition()
 
-        if self.state in (STATE_RECORDING, STATE_TYPING, STATE_MIC_STARTING):
-            self._pulse_phase += 0.12
-        elif self.state in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
-            self._progress_phase = (self._progress_phase + 0.02) % 1.0
+    def reset_position(self) -> None:
+        self._anchor = None
+        self._reposition()
+
+    def has_custom_position(self) -> bool:
+        return self._anchor is not None
+
+    def _apply_size_targets(self) -> None:
+        state = self.state
+        if state in (STATE_IDLE, STATE_LOADING):
+            self._width_target, self._height_target = (HOVER_W, HOVER_H) if self._hover else (IDLE_W, IDLE_H)
+        elif state in (STATE_RECORDING, STATE_MIC_STARTING):
+            self._width_target, self._height_target = ACTIVE_W, PILL_H
+        elif state in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
+            label = self._processing_label()
+            extra = QFontMetrics(_font(8, mono=True)).horizontalAdvance(label) + 10 if label else 0
+            self._width_target, self._height_target = min(BUSY_W + extra, TOAST_MAX_W), PILL_H
+        elif state == STATE_TYPING:
+            self._width_target, self._height_target = BUSY_W, PILL_H
+        elif state in (STATE_SUCCESS, STATE_SELECTION_SUCCESS):
+            self._width_target, self._height_target = SUCCESS_W, PILL_H
+        else:
+            text = self._toast_text()
+            text_w = QFontMetrics(_font(8, QFont.Weight.DemiBold, mono=True)).horizontalAdvance(text)
+            self._width_target = float(min(max(text_w + 36, TOAST_MIN_W), TOAST_MAX_W))
+            self._height_target = PILL_H
+
+    def _tick(self) -> None:
+        # Ease size toward target (drives the expand/collapse feel).
+        moved = False
+        if abs(self._width_current - self._width_target) > 0.5:
+            self._width_current += (self._width_target - self._width_current) * 0.35
+            moved = True
+        elif self._width_current != self._width_target:
+            self._width_current, moved = self._width_target, True
+        if abs(self._height_current - self._height_target) > 0.5:
+            self._height_current += (self._height_target - self._height_current) * 0.35
+            moved = True
+        elif self._height_current != self._height_target:
+            self._height_current, moved = self._height_target, True
+        if moved:
+            self.resize(int(round(self._width_current)), int(round(self._height_current)))
+            self._reposition()
+
+        self._tick_count += 1
+        self._pulse_phase += 0.12
+        if self.state == STATE_RECORDING:
+            # ~20 samples/s of the real mic level scroll the waveform left.
+            # Fast attack, slow release so a syllable reads as a bump, not a blip.
+            if self._tick_count % 3 == 0:
+                self._levels.append(self._smoothed_level)
+            self._smoothed_level *= 0.9
 
         self.update()
 
@@ -142,11 +264,10 @@ class FloatingPill(QWidget):
     def set_state(self, state: str) -> None:
         """`state` is normally a bare state name (STATE_PROCESSING etc.). A
         "processing:<Label>" form additionally carries a display name for a
-        Transforms-hub-driven dictation (e.g. "processing:Prompt Engineering") -
-        painted in place of the generic "Polishing speech..." text. A
-        "recording:<Label>" form likewise overrides the mode badge (e.g.
-        "recording:DIRECT" when this dictation will skip the LLM entirely) -
-        see _paint_mode_badge()."""
+        Transforms-hub-driven dictation (e.g. "processing:Prompt Engineering").
+        A "recording:<Label>" form carries what this recording will do (e.g.
+        "recording:DIRECT" when it skips the LLM entirely) - shown in the
+        tooltip."""
         self._set_state(state)
 
     def _set_state(self, state: str) -> None:
@@ -155,53 +276,23 @@ class FloatingPill(QWidget):
             state, self._status_label = state.split(":", 1)
         else:
             self._status_label = ""
+        previous = self.state
         self.state = state
+        if state == STATE_RECORDING and previous != STATE_RECORDING:
+            self._smoothed_level = 0.0
+            self._levels = deque([0.0] * WAVE_BARS, maxlen=WAVE_BARS)
+        if state not in (STATE_RECORDING, STATE_MIC_STARTING):
+            self._cancel_rect = self._finish_rect = QRectF()
+            self._hover_cancel = self._hover_finish = False
 
-        if state == STATE_IDLE:
-            self._width_target = self._idle_width()
-        elif state == STATE_LOADING:
-            self._width_target = DORMANT_W
-        elif state == STATE_MIC_STARTING:
-            self._width_target = RECORDING_W  # same size as Listening, so going live doesn't jump
-        elif state == STATE_MIC_ERROR:
-            self._width_target = MIC_ERROR_W
-            self._collapse_timer.start(3000)
-        elif state == STATE_RECORDING:
-            self._recording_start = time.time()
-            self._levels = [0.0, 0.0, 0.0, 0.0]
-            self._width_target = RECORDING_W
-        elif state == STATE_PROCESSING:
-            self._width_target = PROCESSING_W
-        elif state == STATE_TYPING:
-            self._width_target = TYPING_W
-        elif state == STATE_SUCCESS:
-            self._width_target = SUCCESS_W
-            self._collapse_timer.start(700)
-        elif state == STATE_SELECTION_PROCESSING:
-            self._width_target = SELECTION_PROCESSING_W
-        elif state == STATE_SELECTION_SUCCESS:
-            self._width_target = SUCCESS_W
-            self._collapse_timer.start(700)
-        elif state == STATE_MODE_CHANGED:
-            self._width_target = 240
-            self._collapse_timer.start(1000)
-        elif state == STATE_ERROR:
-            self._width_target = ERROR_W
-            # No auto-collapse: an init failure stays visible until restarted/fixed,
-            # rather than quietly reverting to a "Ready" label that would be a lie.
-        elif state == STATE_FALLBACK_WARNING:
-            self._width_target = FALLBACK_WARNING_W
-            self._collapse_timer.start(2500)
-        elif state == STATE_CPU_MODE:
-            self._width_target = CPU_MODE_W
-            self._collapse_timer.start(4000)  # one-time startup info, longer than a routine warning
-        elif state == STATE_NO_SELECTION:
-            self._width_target = NO_SELECTION_W
-            self._collapse_timer.start(2000)
-        elif state == STATE_ENGINE_FALLBACK:
-            self._width_target = ENGINE_FALLBACK_W
-            self._collapse_timer.start(4000)  # a real, unusual event - longer than a routine toast
+        seconds = _TOAST_SECONDS.get(state)
+        if state in (STATE_SUCCESS, STATE_SELECTION_SUCCESS):
+            seconds = 0.7
+        if seconds:
+            self._collapse_timer.start(int(seconds * 1000))
 
+        self._apply_size_targets()
+        self._update_tooltip()
         self.update()
 
     def set_mode(self, mode: str) -> None:
@@ -209,27 +300,66 @@ class FloatingPill(QWidget):
         self._set_state(STATE_MODE_CHANGED)
 
     def set_level(self, rms: float) -> None:
+        """Live mic level (RMS per audio block) while recording."""
         if self.state != STATE_RECORDING:
             return
-        self._smoothed_level = 0.6 * self._smoothed_level + 0.4 * min(rms * 12.0, 1.0)
-        self._levels = self._levels[1:] + [self._smoothed_level]
+        level = min((rms * 12.0) ** 0.85, 1.0)
+        if level > self._smoothed_level:
+            self._smoothed_level = 0.5 * self._smoothed_level + 0.5 * level
+        else:
+            self._smoothed_level = 0.85 * self._smoothed_level + 0.15 * level
 
     def set_hotkey_label(self, label: str) -> None:
         self.hotkey_label = label
-        if self.state == STATE_IDLE:
-            self._width_target = self._idle_width()
+        self._update_tooltip()
         self.update()
 
-    def _idle_width(self) -> int:
-        """Size the dormant pill to fit its label - long rebound shortcuts (Ctrl+Alt+Shift+V) must not clip.
-        Upper-bounded as well as lower-bounded: no code path (this one included) should ever be able
-        to stretch the pill toward screen width, whatever the hotkey label ends up being."""
-        label = f"✦ {APP_NAME} | Ready [{self.hotkey_label}]"
-        metrics = QFontMetrics(QFont(theme.FONT_FAMILY, 9))
-        text_width = metrics.horizontalAdvance(label)
-        return max(240, min(text_width + 60, 420))
+    def set_click_action(self, action: str) -> None:
+        self.click_action = action if action in (CLICK_DICTATE, CLICK_DASHBOARD, CLICK_NONE) else CLICK_DICTATE
+        self._update_tooltip()
+
+    def _update_tooltip(self) -> None:
+        if self.state == STATE_LOADING:
+            tip = f"{APP_NAME} is starting..."
+        elif self.state == STATE_IDLE:
+            action = {
+                CLICK_DICTATE: "Click to dictate",
+                CLICK_DASHBOARD: "Click to open the dashboard",
+                CLICK_NONE: "Drag to move",
+            }[self.click_action]
+            tip = f"{action} - or press {self.hotkey_label}"
+        elif self.state in (STATE_RECORDING, STATE_MIC_STARTING):
+            tip = f"Mode: {self._status_label or self.current_mode}"
+        else:
+            tip = ""
+        self.setToolTip(tip)
 
     # --- Painting --------------------------------------------------------------
+
+    def _processing_label(self) -> str:
+        if self.state == STATE_SELECTION_PROCESSING:
+            return "Polishing selection"
+        return self._status_label
+
+    def _toast_text(self) -> str:
+        if self.state == STATE_MODE_CHANGED:
+            return f"Mode: {self.current_mode}"
+        return _TOASTS.get(self.state, "")
+
+    def _colors_for_state(self):
+        """(background, border) of the capsule."""
+        s = self.state
+        if s == STATE_RECORDING:
+            return theme.PILL_BG_RECORDING, theme.ACCENT_RECORDING_DIM
+        if s in (STATE_PROCESSING, STATE_SELECTION_PROCESSING, STATE_MODE_CHANGED):
+            return theme.PILL_BG_PROCESSING, theme.PILL_BORDER
+        if s == STATE_TYPING:
+            return theme.PILL_BG_TYPING, theme.PILL_BORDER
+        if s in (STATE_SUCCESS, STATE_SELECTION_SUCCESS):
+            return theme.PILL_BG_SUCCESS, theme.ACCENT_SUCCESS
+        if s in (STATE_MIC_ERROR, STATE_ERROR, STATE_FALLBACK_WARNING, STATE_CPU_MODE, STATE_ENGINE_FALLBACK):
+            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
+        return theme.PILL_BG, theme.PILL_BORDER
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -237,320 +367,236 @@ class FloatingPill(QWidget):
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
 
         w, h = self.width(), self.height()
-        radius = h / 2.0
-
         bg, border = self._colors_for_state()
         path = QPainterPath()
-        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), radius, radius)
-
-        painter.fillPath(path, QColor(bg))
-        # Apple-style specular sheen: a subtle translucent white gradient
-        # clipped to the same pill shape, brightest at the top edge and
-        # fading out by ~18% of the height - independent of state color.
-        sheen = QLinearGradient(0, 0, 0, h)
-        sheen.setColorAt(0.0, QColor(255, 255, 255, 38))
-        sheen.setColorAt(0.18, QColor(255, 255, 255, 0))
-        painter.fillPath(path, sheen)
-        painter.setPen(QColor(border))
+        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), (h - 1) / 2.0, (h - 1) / 2.0)
+        fill = QColor(bg)
+        fill.setAlphaF(theme.PILL_BG_ALPHA)
+        painter.fillPath(path, fill)
+        edge = QColor(border)
+        if self.state in (STATE_IDLE, STATE_LOADING) and self._hover:
+            edge = QColor(theme.PILL_TEXT)
+        painter.setPen(QPen(edge, 1))
         painter.drawPath(path)
 
         self._paint_content(painter, w, h)
         painter.end()
 
-    def _colors_for_state(self):
-        if self.state == STATE_RECORDING:
-            return theme.PILL_BG_RECORDING, theme.ACCENT_RECORDING
-        if self.state == STATE_MIC_STARTING:
-            return theme.PILL_BG, theme.PILL_TEXT
-        if self.state == STATE_MIC_ERROR:
-            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
-        if self.state == STATE_PROCESSING:
-            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
-        if self.state == STATE_TYPING:
-            return theme.PILL_BG_TYPING, theme.ACCENT_PROCESSING
-        if self.state == STATE_SUCCESS:
-            return theme.PILL_BG_SUCCESS, theme.ACCENT_SUCCESS
-        if self.state == STATE_MODE_CHANGED:
-            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
-        if self.state == STATE_ERROR:
-            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
-        if self.state == STATE_FALLBACK_WARNING:
-            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
-        if self.state == STATE_CPU_MODE:
-            return theme.PILL_BG_WARNING, theme.ACCENT_ERROR
-        if self.state == STATE_SELECTION_PROCESSING:
-            return theme.PILL_BG_PROCESSING, theme.ACCENT_PROCESSING
-        if self.state == STATE_SELECTION_SUCCESS:
-            return theme.PILL_BG_SUCCESS, theme.ACCENT_SUCCESS
-        return theme.PILL_BG, theme.PILL_BORDER
-
-    def _draw_balanced_text(self, painter: QPainter, rect: QRectF, text: str) -> None:
-        """Center `text` in `rect` if it comfortably fits (a short status like
-        "Polishing text..." reads as deliberate, not accidentally left-stuck),
-        falling back to left-alignment once it gets close to the pill's own
-        boundaries (where centering would start clipping instead of helping)."""
-        text_w = painter.fontMetrics().horizontalAdvance(text)
-        align = Qt.AlignmentFlag.AlignCenter if text_w <= rect.width() * 0.9 else Qt.AlignmentFlag.AlignLeft
-        painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | align, text)
-
     def _paint_content(self, painter: QPainter, w: int, h: int) -> None:
         cy = h / 2.0
-        m = CONTENT_MARGIN
-        font = QFont(theme.FONT_FAMILY, 9)
-        painter.setFont(font)
+        s = self.state
 
-        if self.state in (STATE_IDLE, STATE_LOADING):
-            painter.setPen(QColor(theme.ACCENT_PROCESSING if self.state == STATE_LOADING else theme.PILL_TEXT))
-            label = f"✦ {APP_NAME} | Starting..." if self.state == STATE_LOADING else f"✦ {APP_NAME} | Ready [{self.hotkey_label}]"
-            text_w = w - 2 * m - (22 if self.state == STATE_IDLE else 0)  # leave room for the close glyph
-            painter.drawText(QRectF(m, 0, text_w, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
-            if self.state == STATE_IDLE:
-                self._paint_close_button(painter, w, h)
+        if s in (STATE_IDLE, STATE_LOADING):
+            self._paint_idle(painter, w, h)
+        elif s in (STATE_RECORDING, STATE_MIC_STARTING):
+            self._paint_recording(painter, w, h)
+        elif s in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
+            label = self._processing_label()
+            if label:
+                self._paint_dots(painter, QRectF(14, 0, 30, h), theme.ACCENT_PROCESSING)
+                painter.setPen(QColor(theme.PILL_TEXT_PRIMARY))
+                painter.setFont(_font(8, QFont.Weight.DemiBold, mono=True))
+                painter.drawText(QRectF(50, 0, w - 50 - 12, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
             else:
-                self._close_btn_rect = QRectF()
-            return
-
-        if self.state == STATE_MIC_STARTING:
-            self._paint_dot(painter, m, cy, theme.PILL_TEXT)  # grey: not capturing yet
-            painter.setPen(QColor(theme.PILL_TEXT))
-            painter.drawText(QRectF(m + 16, 0, 150, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "Opening mic...")
-            self._paint_mode_badge(painter, w, cy, m)
-            return
-
-        if self.state == STATE_MIC_ERROR:
-            painter.setPen(QColor(theme.ACCENT_ERROR))
-            painter.setFont(QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold))
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "⚠ Microphone didn't start - check Settings")
-            return
-
-        if self.state == STATE_RECORDING:
-            self._paint_dot(painter, m, cy, theme.ACCENT_RECORDING)
-            painter.setPen(QColor(theme.PILL_TEXT_PRIMARY))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            painter.drawText(QRectF(m + 16, 0, 110, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "Listening...")
-            self._paint_bars(painter, m + 130, cy)
-            # Mode badge is measured first (it can run long - "PROMPT_ENGINEER"
-            # is not "RAW") so the elapsed timer to its left never overlaps or
-            # gets squeezed into it, whatever the active mode's name length.
-            badge_w = self._paint_mode_badge(painter, w, cy, m)
+                self._paint_dots(painter, QRectF(0, 0, w, h), theme.ACCENT_PROCESSING)
+        elif s == STATE_TYPING:
+            self._paint_dots(painter, QRectF(0, 0, w, h), theme.ACCENT_PROCESSING)
+        elif s in (STATE_SUCCESS, STATE_SELECTION_SUCCESS):
+            d = h - 10.0
+            circle = QRectF((w - d) / 2.0, (h - d) / 2.0, d, d)
+            self._paint_circle_button(painter, circle, theme.ACCENT_SUCCESS, "check", theme.PILL_ON_ACCENT)
+        else:
+            text = self._toast_text()
+            color = theme.PILL_TEXT_PRIMARY if s in (STATE_MODE_CHANGED, STATE_NO_SELECTION) else theme.ACCENT_ERROR
+            painter.setPen(QColor(color))
+            font = _font(8, QFont.Weight.DemiBold, mono=True)
             painter.setFont(font)
-            painter.setPen(QColor(theme.PILL_TEXT))
-            elapsed = int(time.time() - self._recording_start)
-            timer_text = f"{elapsed // 60}:{elapsed % 60:02d}"
-            timer_right = w - m - badge_w - 10
-            painter.drawText(QRectF(timer_right - 40, 0, 40, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, timer_text)
-            return
+            rect = QRectF(14, 0, w - 28, h)
+            elided = QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, int(rect.width()))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, elided)
 
-        if self.state == STATE_PROCESSING:
-            pulse = 0.5 + 0.5 * abs(((self._pulse_phase % 2.0) - 1.0))
-            color = QColor(theme.ACCENT_PROCESSING)
-            color.setAlphaF(0.5 + 0.5 * pulse)
-            painter.setPen(color)
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            # A Transforms-hub-driven run carries its own name ("Prompt
-            # Engineering...", "Fixing Code...") via the "processing:<Label>"
-            # state suffix (see set_state) - falls back to the generic label
-            # for the plain active-mode dictation path, which has no single name.
-            label = f"{self._status_label}..." if self._status_label else "⚡ Polishing speech..."
-            # Full m-to-(w-m) span, matching every other single-line state
-            # (ERROR/FALLBACK_WARNING/CPU_MODE etc.) - this used to reserve an
-            # extra 60px on the right for no reason (leftover from a copied
-            # RECORDING-state layout, which needs that space for its timer/
-            # badge; PROCESSING has neither), leaving the text and the
-            # progress bar both visibly squeezed left of center.
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), label)
-            self._paint_progress_sweep(painter, w, cy, m)
-            return
-
-        if self.state == STATE_TYPING:
-            self._paint_dot(painter, m, cy, theme.ACCENT_PROCESSING)
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            pulse = 0.5 + 0.5 * abs(((self._pulse_phase % 2.0) - 1.0))
-            color = QColor(theme.ACCENT_PROCESSING)
-            color.setAlphaF(0.6 + 0.4 * pulse)
-            painter.setPen(color)
-            # Direct Dictation (the default, zero-LLM path) - "Pasting..." names
-            # the actual last step (Win32 paste injection), not implementation
-            # detail ("Typing...") the user has no reason to care about.
-            painter.drawText(QRectF(m + 16, 0, w - 2 * m - 16, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "Pasting...")
-            return
-
-        if self.state == STATE_SUCCESS:
-            painter.setPen(QColor(theme.ACCENT_SUCCESS))
-            bold = QFont(theme.FONT_FAMILY, 10, QFont.Weight.Bold)
-            painter.setFont(bold)
-            painter.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, "✓ Injected!")
-            return
-
-        if self.state == STATE_SELECTION_PROCESSING:
-            painter.setPen(QColor(theme.ACCENT_PROCESSING))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "✦ Polishing Selection...")
-            self._paint_progress_sweep(painter, w, cy, m)
-            return
-
-        if self.state == STATE_SELECTION_SUCCESS:
-            painter.setPen(QColor(theme.ACCENT_SUCCESS))
-            bold = QFont(theme.FONT_FAMILY, 10, QFont.Weight.Bold)
-            painter.setFont(bold)
-            painter.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, "✓ Replaced!")
-            return
-
-        if self.state == STATE_MODE_CHANGED:
-            painter.setPen(QColor(theme.PILL_TEXT_PRIMARY))
-            bold = QFont(theme.FONT_FAMILY, 10, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            painter.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter, f"✦ Mode: {self.current_mode}")
-            return
-
-        if self.state == STATE_ERROR:
-            painter.setPen(QColor(theme.ACCENT_ERROR))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), f"⚠ {APP_NAME} | Startup is stuck - see logs/wisperno.log")
-            return
-
-        if self.state == STATE_FALLBACK_WARNING:
-            painter.setPen(QColor(theme.ACCENT_ERROR))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "⚠ Formatting fallback applied")
-            return
-
-        if self.state == STATE_CPU_MODE:
-            painter.setPen(QColor(theme.ACCENT_ERROR))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "⚠ Running in CPU Compatibility Mode (No dedicated GPU detected)")
-            return
-
-        if self.state == STATE_NO_SELECTION:
-            painter.setPen(QColor(theme.PILL_TEXT))
-            painter.setFont(font)
-            self._draw_balanced_text(painter, QRectF(m, 0, w - 2 * m, h), "Highlight text to change style")
-            return
-
-        if self.state == STATE_ENGINE_FALLBACK:
-            painter.setPen(QColor(theme.ACCENT_ERROR))
-            bold = QFont(theme.FONT_FAMILY, 9, QFont.Weight.DemiBold)
-            painter.setFont(bold)
-            self._draw_balanced_text(
-                painter, QRectF(m, 0, w - 2 * m, h),
-                "⚠ Old engine preset retired - switched to a supported one.",
-            )
-            return
-
-    def _paint_close_button(self, painter: QPainter, w: int, h: int) -> None:
-        """Small '×' at the right edge, low-alpha by default, full opacity on hover."""
-        size = 18.0
-        rect = QRectF(w - size - CONTENT_MARGIN, (h - size) / 2.0, size, size)
-        self._close_btn_rect = rect
-
-        alpha = 0.9 if self._hovering_close else 0.4
-        if self._hovering_close:
-            painter.setBrush(QColor(255, 255, 255, 30))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(rect)
-
-        pen_color = QColor(255, 255, 255)
-        pen_color.setAlphaF(alpha)
-        painter.setPen(pen_color)
-        bold = QFont(theme.FONT_FAMILY, 10, QFont.Weight.DemiBold)
-        painter.setFont(bold)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "×")
-
-    def _paint_dot(self, painter: QPainter, x: float, cy: float, base_color: str) -> None:
-        pulse = 0.5 + 0.5 * abs(((self._pulse_phase % 2.0) - 1.0))
-        color = QColor(base_color)
-        color.setAlphaF(0.55 + 0.45 * pulse)
-        painter.setBrush(color)
+    def _paint_idle(self, painter: QPainter, w: int, h: int) -> None:
+        loading = self.state == STATE_LOADING
+        n = 5
+        bar_w, gap = 2.0, 3.0
+        total = n * bar_w + (n - 1) * gap
+        x0 = (w - total) / 2.0
+        cy = h / 2.0
         painter.setPen(Qt.PenStyle.NoPen)
-        r = 5.0
-        painter.drawEllipse(QRectF(x, cy - r, r * 2, r * 2))
-
-    def _paint_bars(self, painter: QPainter, x0: float, cy: float) -> None:
-        # Purple bars alongside the red recording dot - deliberately NOT the
-        # same red (mockup: assets/screenshots/new assets/) - the dot signals
-        # "recording", the waveform is the app's own purple accent, same
-        # visual grammar as the rest of the redesigned UI.
-        painter.setPen(Qt.PenStyle.NoPen)
-        max_h = 14.0
-        for i, level in enumerate(self._levels):
-            bar_h = max(3.0, max_h * level)
-            color = QColor(theme.ACCENT_PROCESSING if level > 0.15 else theme.ACCENT_PROCESSING_DIM)
+        for i in range(n):
+            if loading:
+                # a soft orange sweep while the engines load
+                phase = (self._pulse_phase * 0.6 - i * 0.5) % (2 * math.pi)
+                glow = max(0.0, 1.0 - abs(phase - 1.5) / 1.5)
+                color = QColor(theme.PILL_ACCENT)
+                color.setAlphaF(0.25 + 0.75 * glow)
+                bar_h = 3.0 + 3.0 * glow
+            else:
+                color = QColor(theme.PILL_TEXT_PRIMARY if self._hover else theme.PILL_TEXT)
+                color.setAlphaF(0.9 if self._hover else 0.55)
+                bar_h = (7.0 if self._hover else 3.0) + (4.0 if i == n // 2 and self._hover else 0.0)
             painter.setBrush(color)
-            bx = x0 + i * 8
-            painter.drawRoundedRect(QRectF(bx, cy - bar_h / 2, 3, bar_h), 1.5, 1.5)
+            painter.drawRoundedRect(QRectF(x0 + i * (bar_w + gap), cy - bar_h / 2.0, bar_w, bar_h), 1.0, 1.0)
 
-    def _paint_progress_sweep(self, painter: QPainter, w: int, cy: float, m: int = CONTENT_MARGIN) -> None:
-        # Full m-to-(w-m) span - both callers (PROCESSING, SELECTION_PROCESSING)
-        # have no right-side badge/timer to leave room for, unlike RECORDING.
-        track_left, track_right = m, w - m
-        track_w = max(0, track_right - track_left)
-        painter.setBrush(QColor(theme.ACCENT_PROCESSING_DIM))
+    def _paint_recording(self, painter: QPainter, w: int, h: int) -> None:
+        live = self.state == STATE_RECORDING
+        d = h - 2.0 * EDGE_PAD
+        cy = h / 2.0
+        self._cancel_rect = QRectF(EDGE_PAD, cy - d / 2.0, d, d)
+        self._finish_rect = QRectF(w - EDGE_PAD - d, cy - d / 2.0, d, d)
+
+        self._paint_circle_button(
+            painter, self._cancel_rect,
+            theme.PILL_BUTTON_HOVER if self._hover_cancel else theme.PILL_BUTTON, "x", theme.PILL_TEXT_PRIMARY,
+        )
+        if live:
+            bg = theme.PILL_ACCENT_HOVER if self._hover_finish else theme.PILL_ACCENT
+            self._paint_circle_button(painter, self._finish_rect, bg, "check", theme.PILL_ON_ACCENT)
+        else:
+            # Mic still opening: nothing to finish yet.
+            self._paint_circle_button(painter, self._finish_rect, theme.PILL_BUTTON, "check", theme.PILL_TEXT)
+
+        wave = QRectF(self._cancel_rect.right() + 10, 0, self._finish_rect.left() - self._cancel_rect.right() - 20, h)
+        if live:
+            self._paint_wave(painter, wave)
+        else:
+            self._paint_waiting_dots(painter, wave)
+
+    def _paint_wave(self, painter: QPainter, rect: QRectF) -> None:
+        n = len(self._levels)
+        step = rect.width() / n
+        bar_w = max(1.5, step * 0.55)
+        max_h = rect.height() - 12.0
+        cy = rect.height() / 2.0
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(QRectF(track_left, cy + 9, track_w, 3), 1.5, 1.5)
+        for i, level in enumerate(self._levels):
+            bar_h = 3.0 + (max_h - 3.0) * level
+            color = QColor(theme.PILL_TEXT_PRIMARY if level > 0.08 else theme.PILL_TEXT)
+            color.setAlphaF(1.0 if level > 0.08 else 0.5)
+            painter.setBrush(color)
+            bx = rect.left() + i * step + (step - bar_w) / 2.0
+            painter.drawRoundedRect(QRectF(bx, cy - bar_h / 2.0, bar_w, bar_h), bar_w / 2.0, bar_w / 2.0)
 
-        sweep_w = track_w * 0.28
-        x = track_left + (track_w - sweep_w) * (0.5 + 0.5 * ((self._progress_phase * 2) % 2.0 - 1.0))
-        painter.setBrush(QColor(theme.ACCENT_PROCESSING))
-        painter.drawRoundedRect(QRectF(x, cy + 9, sweep_w, 3), 1.5, 1.5)
+    def _paint_waiting_dots(self, painter: QPainter, rect: QRectF) -> None:
+        """Mic opening: a row of faint dots pulsing in turn - 'wait', not 'speak'."""
+        n = 9
+        step = rect.width() / n
+        painter.setPen(Qt.PenStyle.NoPen)
+        for i in range(n):
+            pulse = 0.5 + 0.5 * math.sin(self._pulse_phase * 1.5 - i * 0.6)
+            color = QColor(theme.PILL_TEXT)
+            color.setAlphaF(0.25 + 0.5 * pulse)
+            painter.setBrush(color)
+            r = 1.5
+            painter.drawEllipse(QPointF(rect.left() + step * (i + 0.5), rect.height() / 2.0), r, r)
 
-    def _paint_mode_badge(self, painter: QPainter, w: int, cy: float, m: int = CONTENT_MARGIN) -> int:
-        """Right-aligned "[MODE]" tag, sized to its own text rather than a fixed
-        56px box - a long mode name (e.g. "PROMPT_ENGINEER") was getting
-        clipped/squished against that old fixed width. Returns the measured
-        width so callers (e.g. RECORDING's elapsed timer) can lay out to its left
-        without overlapping, whatever the mode name's length."""
-        badge_font = QFont(theme.FONT_FAMILY, 8, QFont.Weight.DemiBold)
-        # A "recording:<Label>" state (see set_state's docstring) overrides
-        # the badge for this specific recording - e.g. "DIRECT" when this
-        # dictation will skip the LLM entirely, regardless of which
-        # active_mode preset ("polish" etc.) happens to be selected.
-        mode_label = self._status_label if self._status_label else self.current_mode
-        text = f"[{mode_label}]"
-        text_w = QFontMetrics(badge_font).horizontalAdvance(text)
-        painter.setPen(QColor(theme.PILL_TEXT))
-        painter.setFont(badge_font)
-        painter.drawText(QRectF(w - m - text_w, 0, text_w, self.height()),
-                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, text)
-        return text_w
+    def _paint_dots(self, painter: QPainter, rect: QRectF, color: str) -> None:
+        """Three dots that swell in turn (processing / pasting)."""
+        painter.setPen(Qt.PenStyle.NoPen)
+        cx, cy = rect.center().x(), rect.height() / 2.0
+        for i in range(3):
+            swell = 0.5 + 0.5 * math.sin(self._pulse_phase * 1.4 - i * 0.9)
+            c = QColor(color)
+            c.setAlphaF(0.35 + 0.65 * swell)
+            painter.setBrush(c)
+            painter.drawEllipse(QPointF(cx + (i - 1) * 9.0, cy), 2.0 + 1.2 * swell, 2.0 + 1.2 * swell)
+
+    def _paint_circle_button(self, painter: QPainter, rect: QRectF, bg: str, glyph: str, fg: str) -> None:
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(bg))
+        painter.drawEllipse(rect)
+        pen = QPen(QColor(fg), max(1.4, rect.width() * 0.085))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy, u = rect.center().x(), rect.center().y(), rect.width()
+        if glyph == "x":
+            r = u * 0.2
+            painter.drawLine(QPointF(cx - r, cy - r), QPointF(cx + r, cy + r))
+            painter.drawLine(QPointF(cx - r, cy + r), QPointF(cx + r, cy - r))
+        else:
+            check = QPainterPath(QPointF(cx - u * 0.2, cy + u * 0.01))
+            check.lineTo(cx - u * 0.05, cy + u * 0.16)
+            check.lineTo(cx + u * 0.22, cy - u * 0.14)
+            painter.drawPath(check)
 
     # --- Mouse interaction -----------------------------------------------------
-    # A single left-click (mousePressEvent, below) opens the dashboard - no
-    # double-click requirement, so there is no separate mouseDoubleClickEvent.
+    # Press + move past a few pixels drags the pill; press + release in place is
+    # a click: the x / check while recording, otherwise Settings' "click action".
+
+    def _over_buttons(self, pos) -> bool:
+        return self._cancel_rect.contains(pos) or (self.state == STATE_RECORDING and self._finish_rect.contains(pos))
 
     def mouseMoveEvent(self, event) -> None:
-        was_hovering = self._hovering_close
-        self._hovering_close = self.state == STATE_IDLE and self._close_btn_rect.contains(event.position())
-        if self._hovering_close != was_hovering:
-            self.setCursor(Qt.CursorShape.PointingHandCursor if self._hovering_close else Qt.CursorShape.ArrowCursor)
+        if event.buttons() & Qt.MouseButton.LeftButton and self._press_global is not None:
+            delta = event.globalPosition().toPoint() - self._press_global
+            if self._dragging or abs(delta.x()) + abs(delta.y()) > DRAG_THRESHOLD_PX:
+                self._dragging = True
+                self.setCursor(Qt.CursorShape.SizeAllCursor)
+                self._anchor = QPointF(self._press_anchor.x() + delta.x(), self._press_anchor.y() + delta.y())
+                self._reposition()
+            return
+        pos = event.position()
+        hover_cancel = self._cancel_rect.contains(pos)
+        hover_finish = self.state == STATE_RECORDING and self._finish_rect.contains(pos)
+        if (hover_cancel, hover_finish) != (self._hover_cancel, self._hover_finish):
+            self._hover_cancel, self._hover_finish = hover_cancel, hover_finish
             self.update()
+        clickable = hover_cancel or hover_finish or (self.state == STATE_IDLE and self.click_action != CLICK_NONE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor)
+
+    def enterEvent(self, event) -> None:
+        self._hover = True
+        self._apply_size_targets()
+        self.update()
 
     def leaveEvent(self, event) -> None:
-        if self._hovering_close:
-            self._hovering_close = False
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-            self.update()
+        self._hover = False
+        self._hover_cancel = self._hover_finish = False
+        self._apply_size_targets()
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.update()
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
             return
-        if self.state == STATE_IDLE and self._close_btn_rect.contains(event.position()):
-            self.close_requested.emit()
+        self._press_global = event.globalPosition().toPoint()
+        self._press_anchor = QPointF(self.x() + self.width() / 2.0, self.y() + self.height() / 2.0)
+        self._dragging = False
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or self._press_global is None:
             return
-        # Single click (anywhere else on the pill) opens the dashboard - no
-        # double-click requirement.
-        self.dashboard_requested.emit()
+        was_dragging = self._dragging
+        self._press_global = self._press_anchor = None
+        self._dragging = False
+        if was_dragging:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self.position_changed.emit(int(self._anchor.x()), int(self._anchor.y()))
+            return
+        self._on_clicked(event.position())
+
+    def _on_clicked(self, pos) -> None:
+        if self.state in (STATE_RECORDING, STATE_MIC_STARTING):
+            if self._cancel_rect.contains(pos):
+                self.cancel_dictation_requested.emit()
+            elif self.state == STATE_RECORDING and self._finish_rect.contains(pos):
+                self.finish_dictation_requested.emit()
+            return
+        if self.state != STATE_IDLE:
+            return
+        if self.click_action == CLICK_DICTATE:
+            self.toggle_dictation_requested.emit()
+        elif self.click_action == CLICK_DASHBOARD:
+            self.dashboard_requested.emit()
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu(self)
         menu.addAction("Open Dashboard", self.dashboard_requested.emit)
         menu.addAction("Cycle Mode", self.cycle_mode_requested.emit)
+        if self.has_custom_position():
+            menu.addAction("Reset Pill Position", self.position_reset_requested.emit)
         menu.addSeparator()
         menu.addAction("Hide Pill", self.hide_pill_requested.emit)
         menu.addAction(f"Quit {APP_NAME} Completely", self.quit_requested.emit)

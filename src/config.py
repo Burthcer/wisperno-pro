@@ -6,7 +6,7 @@ Loads and validates settings from config.yaml with full typing and default fallb
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union
 import yaml
 from pydantic import BaseModel, Field
 
@@ -202,6 +202,15 @@ class AppConfig(BaseModel):
     writing_styles_hotkey: str = Field(default="alt+v", description="Hotkey to open the Writing Styles HUD on the current text selection")
     minimize_to_tray: bool = Field(default=True, description="Closing the dashboard/pill minimizes to tray instead of quitting")
     pill_always_on_top: bool = Field(default=True, description="Keep the floating pill above other windows, including fullscreen apps/games")
+    pill_click_action: str = Field(
+        default="dictate",
+        description="What a click on the idle pill does: 'dictate' (start a dictation; the pill's check/x then "
+                    "finish/cancel it), 'dashboard' (open the dashboard) or 'none' (the pill only displays).",
+    )
+    pill_position: Optional[List[int]] = Field(
+        default=None,
+        description="Remembered [x, y] centre of the pill after you drag it; unset = bottom centre of the main screen.",
+    )
     audio_cues_enabled: bool = Field(default=False, description="Play a short tone when dictation starts and stops")
     app_styles_enabled: bool = Field(
         default=True,

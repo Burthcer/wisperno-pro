@@ -31,6 +31,7 @@ datas = []
 datas += collect_data_files("faster_whisper")
 datas += [("config/config.yaml", "config"), ("config/dictionary.json", "config")]
 datas += [("assets/icons/wisperno.ico", "assets/icons"), ("assets/icons/wisperno.png", "assets/icons")]
+datas += [("assets/fonts", "assets/fonts")]  # Inter Tight + JetBrains Mono (SIL OFL) - see src/ui/theme.py:load_fonts
 
 a = Analysis(
     ["main.py"],

@@ -105,8 +105,39 @@ def test_bug_fix_rules_kept() -> None:
     logger.success("PASS: transparent labels and objectName-scoped cards kept.")
 
 
+def test_palette_is_devbhamaria_com() -> None:
+    logger.info("--- Testing the palette is the one from devbhamaria.com ---")
+    # --bg/--bg2/--bg3/--ink/--ink2/--hair/--acc from the site's portfolio3d.css.
+    assert (theme.BG_APP, theme.BG_CARD, theme.BG_CARD_HOVER) == ("#0C0C0B", "#151513", "#1E1D1B")
+    assert (theme.TEXT_PRIMARY, theme.TEXT_SECONDARY, theme.BORDER_SUBTLE) == ("#ECEBE6", "#AAA79E", "#2A2926")
+    assert theme.INK == theme.ACCENT_PRIMARY == theme.PILL_ACCENT == "#FF5714"
+    # Orange fills carry the dark ink (white on #ff5714 is only 3.2:1).
+    assert contrast(theme.ON_INK, theme.INK) >= 4.5 and contrast("#FFFFFF", theme.INK) < 4.5
+    logger.success("PASS: warm near-black surfaces, off-white ink, hairlines, one orange accent.")
+
+
+def test_site_fonts_are_bundled_and_load() -> None:
+    from PySide6.QtGui import QFontDatabase
+    from PySide6.QtWidgets import QApplication
+
+    logger.info("--- Testing Inter Tight / JetBrains Mono ship with the app ---")
+    QApplication.instance() or QApplication([])
+    fonts_dir = BASE_DIR / "assets" / "fonts"
+    for name in ("InterTight-Variable.ttf", "JetBrainsMono-Variable.ttf", "OFL.txt"):
+        assert (fonts_dir / name).is_file(), f"missing assets/fonts/{name}"
+    theme.load_fonts()
+    families = set(QFontDatabase.families())
+    assert {"Inter Tight", "JetBrains Mono"} <= families, "bundled fonts did not register"
+    assert theme.FONT_FAMILY.startswith("Inter Tight") and theme.FONT_FAMILY_MONO.startswith("JetBrains Mono")
+    assert 'assets/fonts' in (BASE_DIR / "wisperno.spec").read_text(encoding="utf-8"), "PyInstaller spec must bundle the fonts"
+    assert "assets" in (BASE_DIR / "build_exe.py").read_text(encoding="utf-8") and "fonts" in (BASE_DIR / "build_exe.py").read_text(encoding="utf-8")
+    logger.success("PASS: font files present, registered by load_fonts(), and packaged.")
+
+
 def run_all_tests() -> None:
     test_palette_is_dark()
+    test_palette_is_devbhamaria_com()
+    test_site_fonts_are_bundled_and_load()
     test_text_contrast()
     test_no_hard_coded_colours_outside_theme()
     test_overlays_use_pill_tokens_only()

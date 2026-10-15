@@ -16,14 +16,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-MIN_WIDTH = 240
+MIN_WIDTH = 40   # the idle capsule is a thin 46px strip; only toasts are wide
 MAX_WIDTH = 450
+MAX_HEIGHT = 34
 
-STATES = ["loading", "idle", "recording", "processing", "success", "selection_processing", "selection_success", "mode_changed", "error"]
+STATES = ["loading", "idle", "mic_starting", "recording", "processing", "typing", "success", "selection_processing",
+          "selection_success", "mode_changed", "error", "mic_error", "fallback_warning", "cpu_mode", "no_selection",
+          "engine_fallback"]
 
 
 def test_pill_width_bounded_in_every_state() -> None:
-    logger.info("--- Testing FloatingPill: width stays bounded (240-450px) in every state ---")
+    logger.info("--- Testing FloatingPill: width stays bounded (40-450px) in every state ---")
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QGuiApplication
     from src.ui.floating_pill import FloatingPill, PILL_H
@@ -34,9 +37,8 @@ def test_pill_width_bounded_in_every_state() -> None:
 
     pill = FloatingPill(initial_mode="POLISH", hotkey_label="Ctrl+Alt+Shift+V")  # deliberately long hotkey label
 
-    # Construction starts in the LOADING state, which intentionally uses the
-    # narrower DORMANT_W ("Starting..." has no hotkey label to fit) - the
-    # STATES loop below covers LOADING's actual width bound explicitly.
+    # Construction starts in the LOADING state (the small idle strip); the
+    # STATES loop below covers every other state's width bound explicitly.
     logger.info(f"After construction: width={pill.width()} height={pill.height()} pos=({pill.x()},{pill.y()})")
     assert pill.width() <= MAX_WIDTH, f"Initial pill width {pill.width()} exceeds the {MAX_WIDTH}px ceiling."
     assert pill.width() <= screen.width(), "Pill wider than the screen at construction."
@@ -44,14 +46,16 @@ def test_pill_width_bounded_in_every_state() -> None:
     for state in STATES:
         pill._set_state(state)
         pill._width_current = pill._width_target  # settle the animated width immediately for inspection
-        pill.resize(int(pill._width_current), PILL_H)
+        pill._height_current = pill._height_target
+        pill.resize(int(pill._width_current), int(pill._height_current))
         pill._reposition()
         logger.info(f"{state}: width={pill.width()} pos=({pill.x()},{pill.y()})")
 
         assert pill.width() <= screen.width(), f"[{state}] pill width {pill.width()} exceeds screen width {screen.width()}."
         assert pill.width() <= MAX_WIDTH, f"[{state}] pill width {pill.width()} exceeds the {MAX_WIDTH}px ceiling."
-        assert pill.width() >= MIN_WIDTH - 20, f"[{state}] pill width {pill.width()} is implausibly small."
-        assert pill.height() == PILL_H, f"[{state}] pill height {pill.height()} != fixed {PILL_H}."
+        assert pill.width() >= MIN_WIDTH, f"[{state}] pill width {pill.width()} is implausibly small."
+        assert 10 <= pill.height() <= MAX_HEIGHT, f"[{state}] pill height {pill.height()} out of range."
+        assert pill.height() <= PILL_H
         assert pill.x() >= 0 and pill.x() + pill.width() <= screen.width(), f"[{state}] pill runs off-screen horizontally."
 
     logger.success(f"PASS: pill width stayed within [{MIN_WIDTH}, {MAX_WIDTH}]px (screen is {screen.width()}px) across all {len(STATES)} states.")

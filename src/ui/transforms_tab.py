@@ -165,7 +165,7 @@ class _TransformsHub(QWidget):
     def _transform_card(self, t: dict) -> QFrame:
         card = QFrame(objectName="transformCard")
         card.setStyleSheet(
-            f"#transformCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}"
+            f"#transformCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 12px; }}"
             f"#transformCard:hover {{ border-color: {theme.BORDER_STRONG}; }}"
         )
         card.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -188,7 +188,7 @@ class _TransformsHub(QWidget):
 
     def _create_card(self) -> QFrame:
         card = QFrame(objectName="createCard")
-        card.setStyleSheet(f"#createCard {{ background-color: transparent; border: 1px dashed {theme.BORDER_STRONG}; border-radius: 14px; }}")
+        card.setStyleSheet(f"#createCard {{ background-color: transparent; border: 1px dashed {theme.BORDER_STRONG}; border-radius: 12px; }}")
         card.setCursor(Qt.CursorShape.PointingHandCursor)
         card.setMinimumHeight(140)
         v = QVBoxLayout(card)

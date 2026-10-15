@@ -96,13 +96,19 @@ where checkable (e.g. the hotkeys above are read from `src/database.py`/
   ("slash compact" -> `/compact`). Vocabulary/dictionary biasing (Settings ->
   Dictionary) ships **empty by default** - it's a personal customization
   feature, not preloaded with any particular developer's own corrections.
-- **UI redesign**: a jet-black/purple visual pass across the whole dashboard
-  (`src/ui/theme.py` - `#08080C` canvas, `#A855F7` accent), a redesigned
+- **UI redesign (v1.0, Wisperno Pro)**: the dashboard takes its look from
+  devbhamaria.com (`src/ui/theme.py` - warm near-black `#0C0C0B` canvas,
+  `#ECEBE6` ink, hairline `#2A2926` borders, one `#FF5714` orange accent,
+  Inter Tight + JetBrains Mono bundled in `assets/fonts`), a redesigned
   History tab (word/time/WPM/dictation-count summary row, search, filter
   pills), a Hardware Telemetry tab showing GPU VRAM and system RAM with
   dual-layer attribution (Wisperno's own usage vs. total system usage), and
-  a floating pill with a live mic-driven waveform. See Interface &
-  Ergonomics below.
+  a compact floating pill (x, live mic-driven waveform, check) you can drag
+  anywhere and click to dictate. See Interface & Ergonomics below.
+- **Domains**: saying "dev dot to" types `dev.to` (also `www dot google dot
+  com`, `dev dot to slash name`); "dot" stays a word in ordinary sentences
+  ("polka dot", "a dot in the middle"), and a literal `dev.to` / `main.py`
+  from Whisper is no longer split into "dev. To" / "main. Py".
 - **Windows integration fixes**: correct taskbar icon/grouping via an
   explicit `AppUserModelID`, no startup hang (heavy model/device loading
   moved off the UI thread), and an installer that upgrades in place instead
@@ -119,6 +125,16 @@ added by hand later; until then, the dashboard's tab layout is
 `History | Transforms | Dictionary | Snippets | Settings | System Usage`,
 and the floating status pill is the only UI element visible outside the
 dashboard window during normal use.
+
+**The pill.** Idle it is a thin strip of faint bars (it grows slightly under
+the cursor). Drag it anywhere - the spot is remembered (right-click -> Reset
+Pill Position, or Settings -> General -> System). While recording it shows
+`x`, a live waveform of the real mic level and a check: the check finishes and
+types the text, the `x` throws the recording away. What a plain click does is
+Settings -> General -> System -> *Clicking the Pill*: start dictating (default;
+click again or press the check to finish), open the dashboard, or nothing. The
+mic is still only open while a dictation is running; "recording" is only
+painted once real audio has arrived.
 
 ## Quick Start
 

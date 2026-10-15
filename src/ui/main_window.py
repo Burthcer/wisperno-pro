@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(theme.get_app_icon())
+        theme.load_fonts()  # Inter Tight / JetBrains Mono, before the stylesheet names them
         self.setStyleSheet(theme.MAIN_WINDOW_QSS)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         # Explicit, generous bounds rather than trusting the layout's own computed

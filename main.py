@@ -133,6 +133,7 @@ class WispernoApp:
         # rather than per-widget in every form that has a placeholder.
         from PySide6.QtGui import QPalette, QColor
         from src.ui import theme as _theme
+        _theme.load_fonts()
         palette = self.app.palette()
         palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(_theme.TEXT_PLACEHOLDER))
         self.app.setPalette(palette)
@@ -142,6 +143,8 @@ class WispernoApp:
             initial_mode=self.engine.active_mode,
             hotkey_label=self.engine._dictation_hotkey_label(),
             always_on_top=self.engine.config.pill_always_on_top,
+            click_action=self.engine.config.pill_click_action,
+            position=self.engine.config.pill_position,
         )
         self.main_window = None
 
@@ -174,7 +177,11 @@ class WispernoApp:
         self.pill.dashboard_requested.connect(self.open_dashboard)
         self.pill.cycle_mode_requested.connect(self.engine.cycle_active_mode)
         self.pill.hide_pill_requested.connect(lambda: self.set_pill_visible(False))
-        self.pill.close_requested.connect(self._on_pill_close_clicked)
+        self.pill.toggle_dictation_requested.connect(self.engine.pill_toggle_dictation)
+        self.pill.finish_dictation_requested.connect(self.engine.pill_finish_dictation)
+        self.pill.cancel_dictation_requested.connect(self.engine.pill_cancel_dictation)
+        self.pill.position_changed.connect(self.engine.set_pill_position)
+        self.pill.position_reset_requested.connect(self.reset_pill_position)
         self.pill.quit_requested.connect(self.shutdown_application)
 
         self._shutting_down = False
@@ -252,11 +259,14 @@ class WispernoApp:
         self.engine.config.pill_always_on_top = enabled
         self.engine.save_config()
 
-    def _on_pill_close_clicked(self) -> None:
-        if self.engine.config.minimize_to_tray:
-            self.set_pill_visible(False)
-        else:
-            self.shutdown_application()
+    def set_pill_click_action(self, action: str) -> None:
+        self.engine.set_pill_click_action(action)
+        self.pill.set_click_action(action)
+
+    def reset_pill_position(self) -> None:
+        """Put the pill back at the bottom centre of the main screen."""
+        self.pill.reset_position()
+        self.engine.set_pill_position(None, None)
 
     def shutdown_application(self) -> None:
         """

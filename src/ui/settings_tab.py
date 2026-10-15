@@ -127,7 +127,7 @@ def _shortcut_card(title: str, description: str):
     so paired shortcuts sit side-by-side in a two-column grid instead of full-width rows."""
     frame = QFrame(objectName="shortcutCard")
     # Scoped by id - an unscoped style cascades to (and boxes) every label inside.
-    frame.setStyleSheet(f"#shortcutCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}")
+    frame.setStyleSheet(f"#shortcutCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 12px; }}")
     v = QVBoxLayout(frame)
     v.setContentsMargins(12, 12, 12, 12)
     heading = QLabel(title)
@@ -336,6 +336,26 @@ class _GeneralSettings(QWidget):
         self.pill_cb.stateChanged.connect(self._on_pill_visibility_changed)
         layout.addWidget(self.pill_cb)
 
+        click_card, click_v = _shortcut_card(
+            "Clicking the Pill",
+            "The pill can be dragged anywhere on screen. While recording, its x cancels (nothing is typed) "
+            "and its check finishes.",
+        )
+        click_row = QHBoxLayout()
+        self.pill_click_cb = _no_wheel(QComboBox())
+        self.pill_click_cb.addItem("Start dictating (click again, or the check, to finish)", "dictate")
+        self.pill_click_cb.addItem("Open the dashboard", "dashboard")
+        self.pill_click_cb.addItem("Nothing (hotkeys only)", "none")
+        click_idx = self.pill_click_cb.findData(engine.config.pill_click_action)
+        self.pill_click_cb.setCurrentIndex(click_idx if click_idx >= 0 else 0)
+        self.pill_click_cb.currentIndexChanged.connect(self._on_pill_click_action_changed)
+        click_row.addWidget(self.pill_click_cb, 1)
+        self.reset_pill_btn = QPushButton("Reset Position")
+        self.reset_pill_btn.clicked.connect(self._on_reset_pill_position)
+        click_row.addWidget(self.reset_pill_btn)
+        click_v.addLayout(click_row)
+        layout.addWidget(click_card)
+
         self.minimize_to_tray_cb = QCheckBox("Minimize to Tray on Close (uncheck to quit fully)")
         self.minimize_to_tray_cb.setChecked(engine.config.minimize_to_tray)
         self.minimize_to_tray_cb.stateChanged.connect(lambda s: engine.set_minimize_to_tray(s != 0))
@@ -472,6 +492,17 @@ class _GeneralSettings(QWidget):
         if hasattr(self.controller, "set_pill_visible"):
             self.controller.set_pill_visible(state != 0)
 
+    def _on_pill_click_action_changed(self, _index: int) -> None:
+        action = self.pill_click_cb.currentData()
+        if hasattr(self.controller, "set_pill_click_action"):
+            self.controller.set_pill_click_action(action)
+        else:
+            self.engine.set_pill_click_action(action)
+
+    def _on_reset_pill_position(self) -> None:
+        if hasattr(self.controller, "reset_pill_position"):
+            self.controller.reset_pill_position()
+
     def _on_always_on_top_changed(self, state: int) -> None:
         if hasattr(self.controller, "set_pill_always_on_top"):
             self.controller.set_pill_always_on_top(state != 0)
@@ -524,7 +555,7 @@ class _AdvancedSettings(QWidget):
         # (QLabel is a QFrame), boxing each label in its own border.
         preset_card.setStyleSheet(
             f"#presetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; "
-            f"border-radius: 14px; }}"
+            f"border-radius: 12px; }}"
         )
         preset_layout = QVBoxLayout(preset_card)
         preset_layout.setContentsMargins(20, 20, 20, 20)
@@ -861,7 +892,7 @@ class _AdvancedSettings(QWidget):
         cards_row = QHBoxLayout()
         for key, preset in MODEL_PRESETS.items():
             card = QFrame(objectName="presetCompareCard")
-            card.setStyleSheet(f"#presetCompareCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}")
+            card.setStyleSheet(f"#presetCompareCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 12px; }}")
             cv = QVBoxLayout(card)
             cv.setContentsMargins(12, 12, 12, 12)
             title = QLabel(preset["label"])

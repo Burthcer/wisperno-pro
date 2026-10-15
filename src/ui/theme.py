@@ -17,74 +17,90 @@ def get_app_icon() -> QIcon:
     return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
 
 # --- Floating pill ------------------------------------------------------
-# Dark like the dashboard, and it floats over whatever app you're typing in.
-PILL_BG = "#0B0B0F"
-PILL_BG_ALPHA = 0.92
-PILL_BORDER = "#1F1F2B"
-PILL_TEXT = "#A0A0B0"
-PILL_TEXT_PRIMARY = "#EDEDED"
-PILL_SURFACE = "#17171F"           # inset areas (Live Transcription's text box)
-PILL_BUTTON = "#1C1C26"
-PILL_BUTTON_HOVER = "#262632"
+# Same warm near-black as the dashboard (and devbhamaria.com); it floats over
+# whatever app you're typing in, so it stays opaque-ish and hairline-bordered.
+PILL_BG = "#0C0C0B"
+PILL_BG_ALPHA = 0.94
+PILL_BORDER = "#2A2926"
+PILL_TEXT = "#AAA79E"
+PILL_TEXT_PRIMARY = "#ECEBE6"
+PILL_SURFACE = "#151513"           # inset areas (Live Transcription's text box)
+PILL_BUTTON = "#1E1D1B"
+PILL_BUTTON_HOVER = "#2A2926"
 # Capsule tint per state (the accent colour below carries the state's hue).
-PILL_BG_RECORDING = "#1E1216"
-PILL_BG_PROCESSING = "#15121F"
-PILL_BG_TYPING = "#101828"
-PILL_BG_SUCCESS = "#101C15"
-PILL_BG_WARNING = "#1F160C"
-PILL_ACCENT = "#7C3AED"            # filled buttons on the overlays (white text 5.7:1)
-PILL_ACCENT_HOVER = "#9333EA"
-PILL_ON_ACCENT = "#FFFFFF"
+PILL_BG_RECORDING = "#140E0B"
+PILL_BG_PROCESSING = "#120F0C"
+PILL_BG_TYPING = "#0F0F0E"
+PILL_BG_SUCCESS = "#0D1410"
+PILL_BG_WARNING = "#17130A"
+PILL_ACCENT = "#FF5714"            # filled buttons on the overlays (dark text 6.2:1)
+PILL_ACCENT_HOVER = "#FF7A3D"
+PILL_ON_ACCENT = "#0C0C0B"
 # The overlays (pill, Live Transcription window) use only PILL_* text and
 # surface colours, so the dashboard palette can change without touching them.
 
-ACCENT_RECORDING = "#EF4444"       # clean red - listening
-ACCENT_RECORDING_DIM = "#5C2222"
-ACCENT_PROCESSING = "#A855F7"      # radiant violet-purple - transforming
-ACCENT_PROCESSING_DIM = "#3B2158"
-ACCENT_SUCCESS = "#30D158"         # emerald - injected
-ACCENT_ERROR = "#FF9F0A"           # amber - init taking abnormally long / failed
+ACCENT_RECORDING = "#FF5714"       # brand orange - listening
+ACCENT_RECORDING_DIM = "#5A2410"
+ACCENT_PROCESSING = "#ECEBE6"      # warm white - transforming
+ACCENT_PROCESSING_DIM = "#3A3834"
+ACCENT_SUCCESS = "#5FD38D"         # injected
+ACCENT_ERROR = "#F5C542"           # yellow - init taking abnormally long / failed
 
 # --- Main dashboard ---------------------------------------------------------
-# Dark: near-black canvas, slightly lifted cards, soft white text, one violet
-# accent. Text colours are chosen for WCAG AA contrast on BG_CARD/BG_APP
-# (tests/test_ui_theme.py checks it): the earlier dark theme's #71717A
-# secondary text was only 3.9:1 on cards.
-BG_APP = "#08080C"
-BG_SIDEBAR = "#0C0C12"
-SIDEBAR_BORDER = "#1A1A22"
-BG_CARD = "#111116"
-BG_CARD_HOVER = "#17171F"
-BORDER_SUBTLE = "#1F1F2B"
-BORDER_STRONG = "#33334A"
-INPUT_BG = "#161620"
-INPUT_BORDER = "#262638"
-TEXT_PRIMARY = "#EDEDED"
-TEXT_SECONDARY = "#9A9AA6"
-TEXT_PLACEHOLDER = "#6B6B76"
-INK = "#7C3AED"                    # primary buttons / active filter pill / selected tab (white text: 5.7:1)
-INK_HOVER = "#9333EA"
-ON_INK = "#FFFFFF"                 # text on INK / ACCENT_PRIMARY fills
-ACCENT_PRIMARY = "#A855F7"
-ACCENT_PRIMARY_ACTIVE = "#C084FC"  # accent text on dark surfaces
-ACCENT_PRIMARY_HOVER = "#9333EA"
-ACCENT_PRIMARY_WASH = "rgba(168, 85, 247, 0.14)"
-ACCENT_SECONDARY = "#9061F9"       # jargon/category badges
-BADGE_EMERALD = "#10B981"          # History "transform"/"live" badges (7.4:1 on cards; #047857 was 3.4:1)
-DANGER = "#EF4444"
-DANGER_WASH = "rgba(239, 68, 68, 0.10)"
-DANGER_WASH_HOVER = "rgba(239, 68, 68, 0.18)"
-DANGER_BORDER = "#5C2222"
-SUCCESS = "#30D158"
-TOOLTIP_BG = "#1C1C26"
-SCROLLBAR_HANDLE = "#2A2A38"
-VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7C3AED, stop:1 #A855F7)"
-RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4F46E5, stop:1 #818CF8)"
+# Taken from devbhamaria.com: warm near-black canvas (#0c0c0b / #151513 /
+# #1e1d1b), warm off-white ink, hairline #2a2926 borders and ONE orange accent
+# (#ff5714) whose fills carry dark text. Contrast of every text/background pair
+# is checked in tests/test_ui_theme.py.
+BG_APP = "#0C0C0B"
+BG_SIDEBAR = "#0F0F0E"
+SIDEBAR_BORDER = "#2A2926"
+BG_CARD = "#151513"
+BG_CARD_HOVER = "#1E1D1B"
+BORDER_SUBTLE = "#2A2926"
+BORDER_STRONG = "#3E3C38"
+INPUT_BG = "#151513"
+INPUT_BORDER = "#2A2926"
+TEXT_PRIMARY = "#ECEBE6"
+TEXT_SECONDARY = "#AAA79E"
+TEXT_PLACEHOLDER = "#8A877E"
+INK = "#FF5714"                    # primary buttons / active filter pill (dark text: 6.6:1)
+INK_HOVER = "#FF7A3D"
+ON_INK = "#0C0C0B"                 # text on INK / ACCENT_PRIMARY fills
+ACCENT_PRIMARY = "#FF5714"
+ACCENT_PRIMARY_ACTIVE = "#FF7A3D"  # accent text on dark surfaces
+ACCENT_PRIMARY_HOVER = "#FF7A3D"
+ACCENT_PRIMARY_WASH = "rgba(255, 87, 20, 0.14)"
+ACCENT_SECONDARY = "#E3C07A"       # jargon/category badges
+BADGE_EMERALD = "#6FCF97"          # History "transform"/"live" badges
+DANGER = "#F26B5B"
+DANGER_WASH = "rgba(242, 107, 91, 0.10)"
+DANGER_WASH_HOVER = "rgba(242, 107, 91, 0.18)"
+DANGER_BORDER = "#5C2A24"
+SUCCESS = "#5FD38D"
+TOOLTIP_BG = "#1E1D1B"
+SCROLLBAR_HANDLE = "#34322F"
+VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF5714, stop:1 #FF9A3D)"
+RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6B6962, stop:1 #AAA79E)"
 
-FONT_FAMILY = "Segoe UI Variable Text, Segoe UI, Inter"
-FONT_FAMILY_DISPLAY = "Georgia, Cambria, serif"  # headings only: Georgia's old-style 0 reads as "o"
-FONT_FAMILY_NUMERIC = "Segoe UI Variable Display, Segoe UI"  # big numbers (metrics)
-FONT_FAMILY_MONO = "Cascadia Mono, Consolas, monospace"
+# The site's own faces (bundled in assets/fonts - see load_fonts()), with the
+# Windows system faces as the fallback if a font file is ever missing.
+FONT_FAMILY = "Inter Tight, Segoe UI Variable Text, Segoe UI"
+FONT_FAMILY_DISPLAY = "Inter Tight, Segoe UI Variable Display, Segoe UI"
+FONT_FAMILY_NUMERIC = "Inter Tight, Segoe UI Variable Display, Segoe UI"  # big numbers (metrics)
+FONT_FAMILY_MONO = "JetBrains Mono, Cascadia Mono, Consolas, monospace"
+
+
+def load_fonts() -> None:
+    """Register the bundled Inter Tight / JetBrains Mono so QSS font-family
+    names resolve on machines that don't have them installed. Call once after
+    the QApplication exists; a missing file just means the fallback faces."""
+    from PySide6.QtGui import QFontDatabase
+
+    fonts_dir = get_base_dir() / "assets" / "fonts"
+    for name in ("InterTight-Variable.ttf", "JetBrainsMono-Variable.ttf"):
+        path = fonts_dir / name
+        if path.exists():
+            QFontDatabase.addApplicationFont(str(path))
 
 MAIN_WINDOW_QSS = f"""
 QMainWindow, QWidget {{
@@ -120,12 +136,14 @@ QListWidget#sidebarNav::item {{
     padding: 8px 12px;
     margin: 1px 0;
     height: 20px;
-    border-radius: 10px;
+    border-radius: 8px;
     border: 1px solid transparent;
+    border-left: 2px solid transparent;
 }}
 QListWidget#sidebarNav::item:selected {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER_SUBTLE};
+    border-left: 2px solid {ACCENT_PRIMARY};
     color: {TEXT_PRIMARY};
     font-weight: 600;
 }}
@@ -136,13 +154,14 @@ QListWidget#sidebarNav::item:hover:!selected {{
 QLabel#brand {{
     font-family: {FONT_FAMILY_DISPLAY};
     font-size: 16pt;
+    font-weight: 700;
     color: {TEXT_PRIMARY};
     padding: 8px 20px 12px 20px;
 }}
 QPushButton#liveTranscribeBtn {{
     background-color: {DANGER_WASH};
     border: 1px solid {DANGER_BORDER};
-    border-radius: 10px;
+    border-radius: 16px;
     margin: 0 10px 12px 10px;
     padding: 9px 12px;
     color: {DANGER};
@@ -155,18 +174,19 @@ QPushButton#liveTranscribeBtn:hover {{
 }}
 QLabel#versionFooter {{
     color: {TEXT_PLACEHOLDER};
+    font-family: {FONT_FAMILY_MONO};
     font-size: 8pt;
     padding: 6px 20px;
 }}
 QFrame#card, QFrame#metricCard {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 14px;
+    border-radius: 12px;
 }}
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
     background-color: {INPUT_BG};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 7px 10px;
     color: {TEXT_PRIMARY};
     selection-background-color: {ACCENT_PRIMARY};
@@ -195,7 +215,7 @@ QComboBox QAbstractItemView {{
 QPushButton {{
     background-color: {BG_CARD};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 10px;
+    border-radius: 12px;   /* pill-ish, but never more than half the button height: Qt then draws square corners */
     padding: 7px 16px;
     color: {TEXT_PRIMARY};
     font-weight: 500;
@@ -226,7 +246,7 @@ QPushButton#danger:hover {{
 QPushButton#filterPill {{
     background-color: transparent;
     border: 1px solid {INPUT_BORDER};
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 6px 14px;
     color: {TEXT_SECONDARY};
 }}
@@ -243,7 +263,7 @@ QPushButton#filterPill[active="true"] {{
 QTableWidget, QListWidget, QTreeWidget {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 14px;
+    border-radius: 12px;
     gridline-color: {BG_SIDEBAR};
     color: {TEXT_PRIMARY};
     selection-background-color: {ACCENT_PRIMARY_WASH};
@@ -252,6 +272,7 @@ QTableWidget, QListWidget, QTreeWidget {{
 QHeaderView::section {{
     background-color: {BG_CARD};
     color: {TEXT_SECONDARY};
+    font-family: {FONT_FAMILY_MONO};
     font-size: 8pt;
     font-weight: 600;
     border: none;
@@ -355,11 +376,11 @@ QProgressBar::chunk {{
     border-radius: 4px;
 }}
 QLabel#metric {{ font-family: {FONT_FAMILY_NUMERIC}; font-size: 20pt; font-weight: 600; color: {TEXT_PRIMARY}; }}
-QLabel#metricLabel {{ color: {TEXT_SECONDARY}; font-size: 8pt; }}
+QLabel#metricLabel {{ color: {TEXT_SECONDARY}; font-family: {FONT_FAMILY_MONO}; font-size: 8pt; }}
 QLabel#sectionTitle {{
     font-family: {FONT_FAMILY_DISPLAY};
     font-size: 17pt;
-    font-weight: 400;
+    font-weight: 700;
     color: {TEXT_PRIMARY};
     padding: 4px 0 8px 0;
 }}

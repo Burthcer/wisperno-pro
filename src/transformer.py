@@ -56,7 +56,8 @@ from typing import List
 from llama_cpp import Llama
 from src.config import LLMConfig, get_base_dir
 from src.direct_formatter import (
-    apply_scratch_that, capitalize_pronoun_i, format_direct, normalize_punctuation_spacing, strip_fillers,
+    apply_scratch_that, apply_spoken_domains, capitalize_pronoun_i, format_direct, normalize_punctuation_spacing,
+    strip_fillers,
     _cap_sentences,
 )
 from src.list_formatter import BULLET, format_lists_in_text
@@ -810,6 +811,7 @@ class Transformer:
             return apply_profanity_filter(raw_text.strip(), self.profanity_filter)
 
         separator = "\n" if mode == "bullets" else " "
+        raw_text = apply_spoken_domains(raw_text)  # "dev dot to" -> "dev.to" before any model sees it
         return apply_profanity_filter(self._run(raw_text, mode, system_prompt, separator), self.profanity_filter)
 
     def transform_with_prompt(self, raw_text: str, system_prompt: str, label: str = "custom") -> str:
@@ -823,6 +825,7 @@ class Transformer:
             return ""
         if self.llm is None or not system_prompt:
             return apply_profanity_filter(raw_text.strip(), self.profanity_filter)
+        raw_text = apply_spoken_domains(raw_text)
         return apply_profanity_filter(self._run(raw_text, label, system_prompt, " "), self.profanity_filter)
 
     def _run(self, raw_text: str, label: str, system_prompt: str, separator: str) -> str:

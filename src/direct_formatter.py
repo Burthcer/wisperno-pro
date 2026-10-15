@@ -86,19 +86,89 @@ def capitalize_pronoun_i(text: str) -> str:
     return LOWERCASE_I_RE.sub("I", text)
 
 
+# --- Domains, file names and e-mail addresses --------------------------------
+# "dev.to", "google.com", "main.py" and "me@site.org" are one token: the
+# missing-space rule above must not turn them into "dev. to", and a spoken
+# "dev dot to" should come out as "dev.to".
+_TLDS_SURE = (
+    "com|org|net|io|dev|app|ai|edu|gov|xyz|info|tech|tv|uk|ly|gg|sh|fm|biz|online|site|blog|page|cloud|club|"
+    "store|shop|ca|de|fr|jp|au|nz|eu|ch|nl|ru|cc"
+)
+# Real endings that are also everyday words ("dot to", "dot in the middle"):
+# only taken after a label that isn't itself a plain word (see _DOT_STOPWORDS).
+_TLDS_AMBIGUOUS = "to|in|me|so|us|co|it|is|my|at|be|by|no|do|go|we|he|am"
+_FILE_EXTS = (
+    "py|js|ts|tsx|jsx|json|md|txt|csv|yaml|yml|html|htm|css|java|cpp|cs|go|rs|rb|php|bat|exe|dll|pdf|docx|xlsx|"
+    "pptx|png|jpg|jpeg|gif|svg|zip|mp3|mp4|wav|ini|cfg|toml|log|sql|env|gguf|iss|spec"
+)
+_DOTTED_TOKEN_RE = re.compile(
+    rf"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"                                   # e-mail address
+    rf"|\b(?:[\w-]+\.)+(?:{_TLDS_SURE}|{_TLDS_AMBIGUOUS}|{_FILE_EXTS})\b(?:/[\w\-./?=&%#~]*)?",  # domain / file name (+ path)
+    re.IGNORECASE,
+)
+_DOT_STOPWORDS = frozenset(
+    "a an the this that these those one two my your his her our their its any each every no some another same "
+    "first last next per and or but of with from for on at by as if when then than so not just only very "
+    "polka decimal red green blue black white full single double small big little tiny period "
+    "i you he she it we they there here what which who whom whose".split()
+)
+_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+_SPOKEN_DOMAIN_RE = re.compile(
+    rf"\b({_LABEL}(?:\s+dot\s+{_LABEL})*)\s+dot\s+({_TLDS_SURE}|{_TLDS_AMBIGUOUS})\b(?![\w-])", re.IGNORECASE,
+)
+_DOMAIN_SLASH_RE = re.compile(
+    rf"(\b(?:[\w-]+\.)+(?:{_TLDS_SURE}|{_TLDS_AMBIGUOUS})(?:/[\w\-.]+)*)\s+(?:forward\s+)?slash\s+(?=[\w])",
+    re.IGNORECASE,
+)
+
+
+def _spoken_domain(match: "re.Match") -> str:
+    labels = re.split(r"\s+dot\s+", match.group(1), flags=re.IGNORECASE) + [match.group(2)]
+    tld = match.group(2).lower()
+    if tld in _TLDS_AMBIGUOUS.split("|") and tld not in _TLDS_SURE.split("|"):
+        # "polka dot to", "a dot in the middle": a plain word before "dot" means it's prose.
+        if labels[-2].lower() in _DOT_STOPWORDS:
+            return match.group(0)
+    return ".".join(labels)
+
+
+def apply_spoken_domains(text: str) -> str:
+    """"dev dot to" -> "dev.to", "www dot google dot com" -> "www.google.com",
+    "dev dot to slash burthcer" -> "dev.to/burthcer". Only when the last part is
+    a real top-level domain, so "polka dot" and "dot product" stay words."""
+    text = _SPOKEN_DOMAIN_RE.sub(_spoken_domain, text)
+    previous = None
+    while previous != text:  # one "slash <segment>" at a time, for deep paths
+        previous = text
+        text = _DOMAIN_SLASH_RE.sub(r"\1/", text)
+    return text
+
+
+def _starts_with_dotted_token(text: str) -> bool:
+    m = _DOTTED_TOKEN_RE.match(text)
+    return bool(m) and m.start() == 0
+
+
 def normalize_punctuation_spacing(text: str) -> str:
     """Insert a missing space after sentence/clause punctuation that's fused
     directly to the next word ('Hello.How' -> 'Hello. How') - a real defect
     both here and in transformer.py's LLM path (fixed content can still be
     typographically fused if the raw input was), so both call this. Safe
     against decimals/thousands-separators since it only fires before a
-    letter, never a digit."""
-    return _MISSING_SPACE_RE.sub(r"\1 ", text)
+    letter, never a digit - and against domains, file names and e-mail
+    addresses ('dev.to', 'main.py'), which are left whole."""
+    spans = [m.span() for m in _DOTTED_TOKEN_RE.finditer(text)]
+    if not spans:
+        return _MISSING_SPACE_RE.sub(r"\1 ", text)
+    return _MISSING_SPACE_RE.sub(
+        lambda m: m.group(0) if any(a <= m.start() < b for a, b in spans) else m.group(0) + " ", text
+    )
 
 
 def _apply_spoken_commands(text: str) -> str:
     """Spoken developer/terminal shorthand -> literal symbols ("slash compact"
     -> "/compact", "my dash file" -> "my-file", "backtick" -> "`")."""
+    text = apply_spoken_domains(text)
     text = _SLASH_COMMAND_RE.sub(r"/\1", text)
     text = _DASH_WORD_RE.sub("-", text)
     text = _UNDERSCORE_WORD_RE.sub("_", text)
@@ -183,7 +253,8 @@ def _cap_punct(item: str) -> str:
     item = item.strip(" ,")
     if not item:
         return item
-    item = item[0].upper() + item[1:]
+    if not _starts_with_dotted_token(item):
+        item = item[0].upper() + item[1:]
     if item[-1] not in ".!?":
         last_sentence = re.split(r"(?<=[.!?])\s+", item)[-1]
         item += "?" if _QUESTION_START_RE.match(last_sentence) else "."
@@ -196,9 +267,11 @@ def _cap_sentences(text: str) -> str:
     in the (heavy, CUDA-touching) llama.cpp import chain."""
     sentences = re.split(r"([.!?]\s+)", text)
     capitalized = "".join(
-        (s[0].upper() + s[1:] if s and s[0].isalpha() else s) for s in sentences
+        (s[0].upper() + s[1:] if s and s[0].isalpha() and not _starts_with_dotted_token(s) else s) for s in sentences
     )
-    return capitalized[0].upper() + capitalized[1:] if capitalized else capitalized
+    if not capitalized or _starts_with_dotted_token(capitalized):
+        return capitalized
+    return capitalized[0].upper() + capitalized[1:]
 
 
 def format_direct(text: str, detect_lists: bool = True) -> str:
