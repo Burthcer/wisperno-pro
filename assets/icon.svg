@@ -1,22 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="mark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#818CF8"/>
-      <stop offset="55%" stop-color="#6366F1"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FDE68A"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <circle cx="128" cy="128" r="120" fill="#12121A"/>
-  <circle cx="128" cy="128" r="120" fill="none" stroke="url(#gold)" stroke-width="8"/>
-  <path d="M 66 70 L 96 170 L 128 98 L 160 170 L 190 70"
-        fill="none" stroke="url(#mark)" stroke-width="17"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 200 42 L 204 52 L 214 56 L 204 60 L 200 70 L 196 60 L 186 56 L 196 52 Z" fill="url(#mark)"/>
-  <rect x="70" y="182" width="116" height="46" rx="23" fill="url(#gold)"/>
-  <text x="128" y="216" text-anchor="middle" font-family="Arial, Helvetica, DejaVu Sans, sans-serif"
-        font-size="34" font-weight="bold" fill="#12121A" letter-spacing="3">PRO</text>
+  <defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF7A3D"/><stop offset="1" stop-color="#FF5714"/></linearGradient></defs>
+  <rect x="12" y="12" width="232" height="232" rx="58" fill="url(#tile)"/>
+  <rect x="62.1" y="81.6" width="19.2" height="48.8" rx="9.6" fill="#0C0C0B"/>
+  <rect x="90.3" y="63.1" width="19.2" height="85.8" rx="9.6" fill="#0C0C0B"/>
+  <rect x="118.4" y="46.1" width="19.2" height="119.9" rx="9.6" fill="#0C0C0B"/>
+  <rect x="146.5" y="69.7" width="19.2" height="72.5" rx="9.6" fill="#0C0C0B"/>
+  <rect x="174.6" y="84.5" width="19.2" height="42.9" rx="9.6" fill="#0C0C0B"/>
+  <rect x="74" y="172" width="108" height="44" rx="22" fill="#0C0C0B"/>
+  <text x="128" y="203" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" letter-spacing="2.5" fill="#FF5714">PRO</text>
 </svg>

@@ -15,8 +15,8 @@ MODE_LABELS = {"polish": "Polish", "prompt_engineer": "Prompt Engineer", "bullet
 
 
 def build_icon() -> QIcon:
-    """The app logo (gold-ringed "PRO" mark, so it's distinguishable from the
-    original Wisperno's tray icon); a drawn mic-dot glyph if the asset is missing."""
+    """The app logo (orange waveform tile - see scripts/make_icon.py); a drawn
+    mic-dot glyph if the asset is missing."""
     try:
         from src.ui.theme import get_app_icon
 

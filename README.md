@@ -1,4 +1,6 @@
-# Wisperno Pro
+<p align="center"><img src="assets/icon.png" alt="Wisperno Pro logo" width="112"></p>
+
+<h1 align="center">Wisperno Pro</h1>
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078D6?logo=windows&logoColor=white)
