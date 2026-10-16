@@ -130,7 +130,11 @@ class MainWindow(QMainWindow):
         self.nav.currentRowChanged.connect(self._on_nav_changed)
         self.nav.setCurrentRow(0)
 
-        engine.history_added.connect(lambda _row: self.history_tab.refresh())
+        engine.history_added.connect(lambda _row: self.history_tab.refresh_when_visible())
+
+    def show_page(self, page) -> None:
+        """Switch the dashboard to one of its tabs (e.g. the pill's "Configure transforms")."""
+        self.nav.setCurrentRow(self.stack.indexOf(page))
 
     def _on_nav_changed(self, index: int) -> None:
         self.stack.setCurrentIndex(index)

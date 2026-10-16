@@ -194,6 +194,22 @@ class HistoryTab(QWidget):
     def reset_scroll(self) -> None:
         self.scroll.verticalScrollBar().setValue(0)
 
+    def refresh_when_visible(self) -> None:
+        """Redraw now if History is on screen; otherwise just remember it needs a redraw. Rebuilding every
+        card runs on the GUI thread - the same one that animates the floating pill - so doing it after every
+        dictation, with the dashboard closed, was pure cost (and could make the pill hesitate)."""
+        if self.isVisible():
+            self._dirty = False
+            self.refresh()
+        else:
+            self._dirty = True
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if getattr(self, "_dirty", False):
+            self._dirty = False
+            self.refresh()
+
     def _set_filter(self, mode: str) -> None:
         self._filter_mode = mode
         self._update_filter_buttons()

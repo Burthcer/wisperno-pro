@@ -191,7 +191,14 @@ class InferenceWorker(QThread):
         # Settings -> Writing -> topic paragraphs for long dictation (src/paragraphing.py).
         self.auto_paragraphs = auto_paragraphs
 
+    def _emit_final(self, state: str) -> None:
+        """The state that ends this dictation ("success" / "idle"). Every way out of run() must send one - a
+        pill left on "processing" with nothing coming to clear it is exactly the stuck-pill bug."""
+        self._final_sent = True
+        self.state_changed.emit(state)
+
     def run(self) -> None:
+        self._final_sent = False
         try:
             if self.use_direct_formatter:
                 self.state_changed.emit("typing")
@@ -204,14 +211,14 @@ class InferenceWorker(QThread):
             raw_text = self.transcriber.transcribe(self.audio_array)
             if not raw_text or not raw_text.strip():
                 logger.info("No speech detected in audio segment.")
-                self.state_changed.emit("idle")
+                self._emit_final("idle")
                 return
             if self.self_correction:
                 corrected = apply_self_correction(raw_text)
                 if corrected != raw_text:
                     logger.info(f"[SELF-CORRECTION] '{raw_text}' -> '{corrected}'")
                     if not corrected.strip():
-                        self.state_changed.emit("idle")
+                        self._emit_final("idle")
                         return
                     raw_text = corrected
 
@@ -269,12 +276,6 @@ class InferenceWorker(QThread):
                 except Exception as e:
                     logger.warning(f"Could not write history row: {e}")
 
-            self.result_ready.emit({
-                "raw_transcript": raw_text,
-                "polished_transcript": final_text,
-                "mode_used": self.mode,
-                "latency_ms": latency_ms,
-            })
             # A soft guardrail fallback (rare now - see sanity_check()'s narrowed
             # scope) still injected working, correctly-capitalized text, just not
             # LLM-polished - shown as a normal success, not a warning pill. The
@@ -282,7 +283,15 @@ class InferenceWorker(QThread):
             # unhandled failure), per the mission's own "don't flash an annoying
             # warning pill unless something actually broke" instruction.
             # [FALLBACK_DEBUG] in the log is where a soft fallback stays visible.
-            self.state_changed.emit("success" if injected else "idle")
+            self._emit_final("success" if injected else "idle")
+            # The History refresh goes AFTER the pill is told it's done: it runs on the same (GUI) thread as the
+            # pill, and used to make the pill sit on "processing" for as long as the list took to redraw.
+            self.result_ready.emit({
+                "raw_transcript": raw_text,
+                "polished_transcript": final_text,
+                "mode_used": self.mode,
+                "latency_ms": latency_ms,
+            })
 
             # After the paste, so it never adds latency to the dictation itself.
             if self.save_recording:
@@ -302,7 +311,9 @@ class InferenceWorker(QThread):
         except Exception as e:
             logger.error(f"InferenceWorker pipeline error: {e}", exc_info=True)
             self.error.emit(str(e))
-            self.state_changed.emit("idle")
+        finally:
+            if not self._final_sent:
+                self.state_changed.emit("idle")  # whatever happened above, never leave the pill busy
 
 
 class RetranscribeWorker(QThread):

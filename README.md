@@ -60,6 +60,8 @@ typing into. It stays tiny while idle and grows only when something happens.
 | Done | A green check |
 | Mode change | A short `Mode: POLISH` toast |
 
+- **Hover for two buttons.** Move the mouse onto the pill and it opens into a **microphone** button (start dictating)
+  and a **wand** button for transforms - so you can pick a transform with the mouse instead of remembering its hotkey.
 - **Click to dictate.** Click the idle pill to start; click the check to finish
   and type the text, or the `x` to throw the recording away - nothing is typed.
   Settings -> General -> *Clicking the Pill* can instead open the dashboard or
@@ -74,6 +76,18 @@ typing into. It stays tiny while idle and grows only when something happens.
   Position*, puts it back at the bottom centre.
 
 ![The six position presets](docs/images/pill-positions.png)
+
+### Choosing a transform from the pill
+
+Click the wand (it has a small arrow) to open the transform menu:
+
+![The pill's transform menu](docs/images/pill-menu.png)
+
+- **Auto Apply After Dictation** - when on, every dictation is run through the transform you picked (so "Prompt Engineer" turns
+  what you say into a prompt as you say it). Off means plain cleanup only.
+- The list shows your Transforms-hub entries; the **tick** marks the current one. **Polish** is ordinary dictation.
+- **Configure transforms** opens the Transforms tab in the dashboard to add or edit them.
+- The pill briefly shows `Mode: <name>` when you pick one, and History labels the entry with the transform's name.
 
 ## Features
 
@@ -259,7 +273,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 | Version | Highlights |
 |---|---|
-| **1.3.0** | Settings split into nine named tabs, including **Sounds** (seven built-in start/stop sounds with Preview, drag-and-drop your own `.wav`). Long dictation is **split into paragraphs by topic**. System Usage: graphics memory now matches Task Manager, each ring shows Wisperno Pro's own share in orange, and the disk-space card says what can be deleted (history, recordings) and what is the app itself. Profanity filter catches more masking styles (`f**king`, `f#cking`...) and also covers Live Transcription. Cleanup no longer drops "you know" from "letting you know". New orange logo, drawn in code if the file ever fails to load. **Installer 7.9 GB -> 4.9 GB** (no more bundled PyTorch). |
+| **1.3.0** | Hover the pill for a **mic button and a transform menu** (pick Polish / Prompt Engineer / ... with the mouse, with an Auto Apply switch). Fixed the pill sometimes sticking on "processing" after the tick.  Settings split into nine named tabs, including **Sounds** (seven built-in start/stop sounds with Preview, drag-and-drop your own `.wav`). Long dictation is **split into paragraphs by topic**. System Usage: graphics memory now matches Task Manager, each ring shows Wisperno Pro's own share in orange, and the disk-space card says what can be deleted (history, recordings) and what is the app itself. Profanity filter catches more masking styles (`f**king`, `f#cking`...) and also covers Live Transcription. Cleanup no longer drops "you know" from "letting you know". New orange logo, drawn in code if the file ever fails to load. **Installer 7.9 GB -> 4.9 GB** (no more bundled PyTorch). |
 | 1.1.0 | Dashboard polish (card layouts, hover states, empty states), eight Settings tabs, System Usage with ring gauges and a disk-space breakdown, new logo, soft chime instead of a beep. |
 | 1.0.0 | Compact draggable pill with live waveform, Pill/Box shape and position presets, click-to-dictate, spoken domains, lists across pauses, keep-last-3-recordings with **Re-transcribe**, optional "scratch that" retractions, dark theme from devbhamaria.com. |
 

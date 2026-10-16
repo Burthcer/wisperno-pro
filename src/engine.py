@@ -90,6 +90,7 @@ class WispernoEngine(QObject):
         self._engines_ready = False
         self._pill_recording = False  # True while a dictation started from the pill's click is recording
         self._processing = False
+        self._queued_dictations: list = []  # (audio, duration_ms) finished while the previous one was still typing
         self._ptt_press_time = 0.0
         self._active_transform_id: Optional[str] = None  # set by a per-transform hotkey press, read at release
         self._inference_worker: Optional[InferenceWorker] = None
@@ -423,18 +424,47 @@ class WispernoEngine(QObject):
             return
 
         if self._processing:
-            logger.warning("Pipeline is already processing a previous utterance. Skipping.")
+            # The previous dictation is still being typed out. Don't drop this one (it used to be thrown away,
+            # leaving the pill stranded): line it up, show the busy pill, and run it the moment the pipeline frees up.
+            logger.warning("Previous dictation still processing - queued this one to run next.")
+            self._dictation_queue().append((audio_array, record_duration_ms))
+            self.state_changed.emit("processing")
             return
+        self._start_dictation_worker(audio_array, record_duration_ms)
+
+    def _dictation_queue(self) -> list:
+        return self.__dict__.setdefault("_queued_dictations", [])
+
+    def _auto_apply_transform(self) -> Optional[dict]:
+        """The Transforms-hub entry every dictation should be run through (the pill's wand menu), or None for
+        ordinary dictation. 'polish' is the ordinary path, so picking it - or switching Auto Apply off - means None."""
+        if not self.config.auto_apply_transform or self.config.active_transform in ("", "polish"):
+            return None
+        transform = self.db.get_transform(self.config.active_transform)
+        return transform if transform and transform.get("is_active", 1) else None
+
+    def set_active_transform(self, transform_id: str) -> None:
+        self.config.active_transform = transform_id
+        self.save_config()
+
+    def set_auto_apply_transform(self, enabled: bool) -> None:
+        self.config.auto_apply_transform = enabled
+        self.save_config()
+
+    def _start_dictation_worker(self, audio_array, record_duration_ms: float) -> None:
         self._processing = True
 
         snippets: Dict[str, str] = {
             row["trigger_phrase"]: row["expansion_text"] for row in self.db.list_snippets(active_only=True)
         }
 
+        transform = self._auto_apply_transform()
         worker = InferenceWorker(
             audio_array, self.transcriber, self.transformer, self.injector, self.db,
-            snippets, self.active_mode, record_duration_ms,
-            use_direct_formatter=not self._llm_dictation_enabled(),
+            snippets, transform["id"] if transform else self.active_mode, record_duration_ms,
+            system_prompt=transform["system_prompt"] if transform else None,
+            status_label=transform["title"] if transform else None,
+            use_direct_formatter=(not self._llm_dictation_enabled()) and transform is None,
             save_recording=self.config.save_recordings_for_testing,
             trailing_space=self.config.injector.trailing_space,
             app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
@@ -451,6 +481,11 @@ class WispernoEngine(QObject):
     def _on_inference_finished(self) -> None:
         self._processing = False
         self._inference_worker = None
+        queue = self._dictation_queue()
+        if queue:
+            audio_array, record_duration_ms = queue.pop(0)
+            logger.info("Running the dictation that was queued behind the previous one.")
+            self._start_dictation_worker(audio_array, record_duration_ms)
 
     def retranscribe_history(self, history_id: int) -> bool:
         """History -> Re-transcribe: run a kept recording through the careful Whisper
@@ -525,7 +560,15 @@ class WispernoEngine(QObject):
 
     def pill_finish_dictation(self) -> None:
         """The pill's check (or a hotkey tap): stop and type what was said."""
-        if not self._engines_ready or not self.audio_worker.recorder.is_recording or self._is_releasing():
+        if not self._engines_ready:
+            return
+        if not self.audio_worker.recorder.is_recording:
+            # The pill thinks it is recording but nothing is: tell it the truth instead of leaving it on screen.
+            logger.info("[PILL] Finish ignored - nothing is recording; resyncing the pill.")
+            self.state_changed.emit("processing" if self._processing else "idle")
+            return
+        if self._is_releasing():
+            logger.info("[PILL] Finish ignored - already stopping.")
             return
         logger.info("[PILL] Finish - committing dictation.")
         if self.hotkey_worker:

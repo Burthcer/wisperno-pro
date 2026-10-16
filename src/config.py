@@ -231,6 +231,15 @@ class AppConfig(BaseModel):
         default_factory=lambda: dict(DEFAULT_APP_STYLES),
         description="App executable name (lowercase, e.g. 'slack.exe') -> 'default' | 'messaging' | 'code'.",
     )
+    active_transform: str = Field(
+        default="polish",
+        description="The transform picked in the pill's wand menu (a Transforms-hub id). 'polish' is ordinary dictation.",
+    )
+    auto_apply_transform: bool = Field(
+        default=True,
+        description="'Auto Apply After Dictation' in the pill's wand menu: run the picked transform on every dictation. "
+                    "Off = dictation gets the normal cleanup only.",
+    )
     auto_paragraphs: bool = Field(
         default=True,
         description="Split a long dictation into paragraphs where the topic changes (src/paragraphing.py). "

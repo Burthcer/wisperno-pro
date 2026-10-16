@@ -173,6 +173,46 @@ def pill_shots() -> None:
     print("saved pill-states.png")
 
 
+def pill_menu_shot() -> None:
+    """The hovered pill (mic + transform buttons) with its transform menu open."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+    from src.ui.floating_pill import FloatingPill
+    from src.ui.pill_menu import build_transform_menu
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    pill = FloatingPill()
+    pill.set_state("idle")
+    pill._hover = pill._hover_wand = True
+    pill._apply_size_targets()
+    pill._width_current, pill._height_current = pill._width_target, pill._height_target
+    pill.resize(int(pill._width_current), int(pill._height_current))
+    QTest.qWait(60)
+    pill_img = pill.grab().scaled(pill.width() * 3, pill.height() * 3, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    pill.close()
+    items = [("polish", "Polish"), ("prompt_engineer", "Prompt Engineer"), ("code_fix", "Detailed Code Fix Prompt"),
+             ("grammar_correct", "Grammar Correct"), ("ai_relay", "AI Relay")]
+    menu = build_transform_menu(None, items, "polish", True, lambda t: None, lambda b: None, lambda: None)
+    menu.popup(QPoint(0, 0))
+    QTest.qWait(200)
+    menu_img = menu.grab()
+    menu.close()
+    pad = 28
+    sheet = QPixmap(max(menu_img.width(), pill_img.width()) + 2 * pad, menu_img.height() + pill_img.height() + 3 * pad)
+    sheet.fill(QColor(theme.BG_APP))
+    q = QPainter(sheet)
+    q.drawPixmap(pad, pad, menu_img)
+    q.drawPixmap(pad + (menu_img.width() - pill_img.width()) // 2, 2 * pad + menu_img.height(), pill_img)
+    q.end()
+    OUT.mkdir(parents=True, exist_ok=True)
+    sheet.save(str(OUT / "pill-menu.png"))
+    print("saved pill-menu.png")
+
+
 def position_preset_diagram() -> None:
     from PySide6.QtCore import QRectF, Qt
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
@@ -209,5 +249,6 @@ def position_preset_diagram() -> None:
 
 if __name__ == "__main__":
     pill_shots()
+    pill_menu_shot()
     position_preset_diagram()
     dashboard_shots()

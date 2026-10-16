@@ -171,10 +171,14 @@ def test_cancel_and_finish_buttons() -> None:
     assert not pill._cancel_rect.isEmpty() and not pill._finish_rect.isEmpty()
     _click(pill, pill._cancel_rect.center())
     assert got["cancel"] == 1 and got["finish"] == 0, got
+    assert pill.state == "idle", "the x gives instant feedback: the pill drops back to idle at once"
+    _settle(pill, "recording:POLISH")
     _click(pill, pill._finish_rect.center())
     assert got["cancel"] == 1 and got["finish"] == 1, got
+    assert pill.state == "processing", "the tick gives instant feedback: busy dots at once, not a frozen waveform"
+    _settle(pill, "recording:POLISH")
     _click(pill, QPointF(pill.width() / 2.0, pill.height() / 2.0))  # the waveform itself does nothing
-    assert got["cancel"] == 1 and got["finish"] == 1 and got["toggle"] == 0, got
+    assert got["cancel"] == 1 and got["finish"] == 1 and got["toggle"] == 0 and pill.state == "recording", got
 
     _settle(pill, "mic_starting:POLISH")  # mic still opening: can cancel, nothing to finish yet
     _click(pill, pill._finish_rect.center())
@@ -381,7 +385,27 @@ def test_shape_presets_and_speech_level() -> None:
     logger.success("PASS: shape switches, presets land in the right corners, speech reaches >60% of the bar height.")
 
 
+def test_busy_pill_never_stays_busy_forever() -> None:
+    logger.info("--- Testing the stuck-pill safety nets ---")
+    from src.ui import floating_pill as fp
+
+    pill = _pill()
+    for busy in ("processing", "typing", "selection_processing"):
+        _settle(pill, busy)
+        assert pill._collapse_timer.isActive(), f"{busy}: a watchdog must be running"
+        assert abs(pill._collapse_timer.interval() - fp.BUSY_TIMEOUT_SECONDS * 1000) < 5
+    _settle(pill, "processing")
+    pill._on_collapse_timeout()  # what the watchdog does when it fires
+    assert pill.state == "idle"
+    _settle(pill, "processing")
+    pill.set_state("success")  # the normal way out still works and replaces the watchdog with the 0.7s one
+    assert pill.state == "success" and pill._collapse_timer.interval() < 1000
+    pill.close()
+    logger.success("PASS: processing/typing always have a timeout back to idle; success still clears them.")
+
+
 def run_all_tests() -> None:
+    test_busy_pill_never_stays_busy_forever()
     test_shape_presets_and_speech_level()
     test_click_action_is_configurable()
     test_drag_moves_the_pill_and_does_not_click()

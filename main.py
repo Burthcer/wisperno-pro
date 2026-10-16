@@ -183,6 +183,7 @@ class WispernoApp:
         self.pill.cancel_dictation_requested.connect(self.engine.pill_cancel_dictation)
         self.pill.position_changed.connect(self.engine.set_pill_position)
         self.pill.position_reset_requested.connect(self.reset_pill_position)
+        self.pill.transform_menu_requested.connect(self.show_pill_transform_menu)
         self.pill.quit_requested.connect(self.shutdown_application)
 
         self._shutting_down = False
@@ -263,6 +264,27 @@ class WispernoApp:
     def set_pill_click_action(self, action: str) -> None:
         self.engine.set_pill_click_action(action)
         self.pill.set_click_action(action)
+
+    def show_pill_transform_menu(self) -> None:
+        """The wand on the hovered pill: pick which Transforms-hub entry runs after dictation."""
+        config = self.engine.config
+        items = [(row["id"], row["title"]) for row in self.engine.db.list_transforms(active_only=True)]
+        self.pill.popup_transform_menu(
+            items, config.active_transform, config.auto_apply_transform,
+            on_select=self.select_pill_transform,
+            on_auto_toggle=self.engine.set_auto_apply_transform,
+            on_configure=self.open_transforms,
+        )
+
+    def select_pill_transform(self, transform_id: str) -> None:
+        self.engine.set_active_transform(transform_id)
+        row = self.engine.db.get_transform(transform_id)
+        if row:
+            self.pill.set_mode(row["title"])  # the pill flashes "Mode: <name>" so you can see what you picked
+
+    def open_transforms(self) -> None:
+        self.open_dashboard()
+        self.main_window.show_page(self.main_window.transforms_tab)
 
     def set_pill_shape(self, shape: str) -> None:
         self.engine.set_pill_shape(shape)

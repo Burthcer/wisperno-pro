@@ -21,6 +21,7 @@ import math
 from collections import deque
 from typing import Optional, Sequence
 
+from loguru import logger
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, QPoint, Signal
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPainterPath, QGuiApplication, QPen
 from PySide6.QtWidgets import QWidget, QMenu
@@ -68,7 +69,7 @@ PRESET_MARGIN = 24
 
 PILL_H = 30                  # height while something is happening
 IDLE_W, IDLE_H = 46, 14      # at rest
-HOVER_W, HOVER_H = 64, 26    # under the cursor
+HOVER_W, HOVER_H = 80, 30    # under the cursor: grows to show the mic and transform buttons
 ACTIVE_W = 156               # [x] waveform [check]
 BUSY_W = 72                  # dots only
 SUCCESS_W = 60
@@ -87,9 +88,15 @@ _TOASTS = {
     STATE_NO_SELECTION: "Highlight text to change style",
     STATE_ENGINE_FALLBACK: "Old engine preset retired - switched to a supported one",
 }
+# Safety net: a busy pill that has not been told it's finished after this long goes back to idle by itself.
+# (Normal dictations finish in seconds; even a 10-minute one is done well inside this.)
+BUSY_TIMEOUT_SECONDS = 90.0
+
 _TOAST_SECONDS = {
     STATE_MIC_ERROR: 3.0, STATE_FALLBACK_WARNING: 2.5, STATE_CPU_MODE: 4.0,
     STATE_NO_SELECTION: 2.0, STATE_ENGINE_FALLBACK: 4.0, STATE_MODE_CHANGED: 1.0,
+    STATE_PROCESSING: BUSY_TIMEOUT_SECONDS, STATE_TYPING: BUSY_TIMEOUT_SECONDS,
+    STATE_SELECTION_PROCESSING: BUSY_TIMEOUT_SECONDS,
     # STATE_ERROR never auto-collapses: an init failure stays visible until
     # fixed, rather than quietly reverting to a "ready" look that would be a lie.
 }
@@ -116,6 +123,7 @@ class FloatingPill(QWidget):
     cancel_dictation_requested = Signal()   # the x while recording
     position_changed = Signal(int, int)     # centre (x, y) after the user drags it
     position_reset_requested = Signal()
+    transform_menu_requested = Signal()     # the wand button on the hovered pill
 
     def __init__(
         self,
@@ -161,6 +169,11 @@ class FloatingPill(QWidget):
         self._finish_rect = QRectF()
         self._hover_cancel = False
         self._hover_finish = False
+        self._mic_rect = QRectF()    # the hover buttons (empty unless the idle pill is expanded)
+        self._wand_rect = QRectF()
+        self._hover_mic = False
+        self._hover_wand = False
+        self._menu_open = False      # the transform menu is showing: keep the pill expanded under it
         self._press_global: Optional[QPoint] = None
         self._press_anchor: Optional[QPointF] = None
         self._dragging = False
@@ -180,7 +193,7 @@ class FloatingPill(QWidget):
 
         self._collapse_timer = QTimer(self)
         self._collapse_timer.setSingleShot(True)
-        self._collapse_timer.timeout.connect(lambda: self._set_state(STATE_IDLE))
+        self._collapse_timer.timeout.connect(self._on_collapse_timeout)
 
         self._apply_size_targets()
         self._width_current, self._height_current = self._width_target, self._height_target
@@ -259,7 +272,8 @@ class FloatingPill(QWidget):
     def _apply_size_targets(self) -> None:
         state = self.state
         if state in (STATE_IDLE, STATE_LOADING):
-            self._width_target, self._height_target = (HOVER_W, HOVER_H) if self._hover else (IDLE_W, IDLE_H)
+            expanded = state == STATE_IDLE and (self._hover or self._menu_open)
+            self._width_target, self._height_target = (HOVER_W, HOVER_H) if expanded else (IDLE_W, IDLE_H)
         elif state in (STATE_RECORDING, STATE_MIC_STARTING):
             self._width_target, self._height_target = ACTIVE_W, PILL_H
         elif state in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
@@ -464,7 +478,72 @@ class FloatingPill(QWidget):
             elided = QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, int(rect.width()))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, elided)
 
+    def _hover_buttons_visible(self) -> bool:
+        return self.state == STATE_IDLE and (self._hover or self._menu_open) and self.width() >= HOVER_W - 6
+
+    def _paint_hover_buttons(self, painter: QPainter, w: int, h: int) -> None:
+        """[mic] [wand v] - start dictating, and choose which transform runs after dictation."""
+        d = h - 2.0 * EDGE_PAD
+        cy = h / 2.0
+        self._mic_rect = QRectF(EDGE_PAD, cy - d / 2.0, d, d)
+        wand_w = w - EDGE_PAD * 2 - d - 6.0
+        self._wand_rect = QRectF(self._mic_rect.right() + 6.0, cy - d / 2.0, wand_w, d)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if self._hover_mic else theme.PILL_BUTTON))
+        painter.drawEllipse(self._mic_rect)
+        self._paint_mic_glyph(painter, self._mic_rect, theme.PILL_TEXT_PRIMARY if self._hover_mic else theme.PILL_TEXT)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if (self._hover_wand or self._menu_open) else theme.PILL_BUTTON))
+        painter.drawRoundedRect(self._wand_rect, d / 2.0, d / 2.0)
+        glyph_color = theme.PILL_TEXT_PRIMARY if (self._hover_wand or self._menu_open) else theme.PILL_TEXT
+        wand_icon = QRectF(self._wand_rect.left() + 3.0, self._wand_rect.top(), d, d)
+        self._paint_wand_glyph(painter, wand_icon, glyph_color)
+        self._paint_chevron(painter, QPointF(self._wand_rect.right() - 11.0, cy), glyph_color)
+
+    @staticmethod
+    def _paint_mic_glyph(painter: QPainter, rect: QRectF, color: str) -> None:
+        cx, cy, u = rect.center().x(), rect.center().y(), rect.width()
+        pen = QPen(QColor(color), max(1.3, u * 0.075))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(QColor(color))
+        painter.drawRoundedRect(QRectF(cx - u * 0.11, cy - u * 0.30, u * 0.22, u * 0.36), u * 0.11, u * 0.11)  # capsule
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawArc(QRectF(cx - u * 0.21, cy - u * 0.20, u * 0.42, u * 0.40), 200 * 16, 140 * 16)          # cradle
+        painter.drawLine(QPointF(cx, cy + u * 0.20), QPointF(cx, cy + u * 0.30))                              # stem
+        painter.drawLine(QPointF(cx - u * 0.10, cy + u * 0.30), QPointF(cx + u * 0.10, cy + u * 0.30))        # base
+
+    @staticmethod
+    def _paint_wand_glyph(painter: QPainter, rect: QRectF, color: str) -> None:
+        cx, cy, u = rect.center().x(), rect.center().y(), rect.width()
+        pen = QPen(QColor(color), max(1.3, u * 0.075))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(cx - u * 0.28, cy + u * 0.28), QPointF(cx + u * 0.06, cy - u * 0.06))        # the wand
+        for sx, sy, r in ((cx + u * 0.20, cy - u * 0.22, u * 0.15), (cx + u * 0.28, cy + u * 0.10, u * 0.08)):  # sparkles
+            painter.drawLine(QPointF(sx - r, sy), QPointF(sx + r, sy))
+            painter.drawLine(QPointF(sx, sy - r), QPointF(sx, sy + r))
+
+    @staticmethod
+    def _paint_chevron(painter: QPainter, c: QPointF, color: str) -> None:
+        pen = QPen(QColor(color), 1.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        chevron = QPainterPath(QPointF(c.x() - 3.2, c.y() + 1.6))
+        chevron.lineTo(c.x(), c.y() - 1.6)
+        chevron.lineTo(c.x() + 3.2, c.y() + 1.6)
+        painter.drawPath(chevron)
+
     def _paint_idle(self, painter: QPainter, w: int, h: int) -> None:
+        if self._hover_buttons_visible():
+            self._paint_hover_buttons(painter, w, h)
+            return
+        self._mic_rect = self._wand_rect = QRectF()
         loading = self.state == STATE_LOADING
         n = 5
         bar_w, gap = 2.0, 3.0
@@ -589,10 +668,18 @@ class FloatingPill(QWidget):
         pos = event.position()
         hover_cancel = self._cancel_rect.contains(pos)
         hover_finish = self.state == STATE_RECORDING and self._finish_rect.contains(pos)
-        if (hover_cancel, hover_finish) != (self._hover_cancel, self._hover_finish):
+        hover_mic = self._mic_rect.contains(pos)
+        hover_wand = self._wand_rect.contains(pos)
+        if (hover_cancel, hover_finish, hover_mic, hover_wand) != (self._hover_cancel, self._hover_finish, self._hover_mic, self._hover_wand):
             self._hover_cancel, self._hover_finish = hover_cancel, hover_finish
+            self._hover_mic, self._hover_wand = hover_mic, hover_wand
             self.update()
-        clickable = hover_cancel or hover_finish or (self.state == STATE_IDLE and self.click_action != CLICK_NONE)
+        if hover_mic or hover_wand:
+            self.setToolTip(f"Start dictating  ({self.hotkey_label})" if hover_mic else "Choose a transform")
+        elif self.state == STATE_IDLE:
+            self._update_tooltip()
+        clickable = (hover_cancel or hover_finish or hover_mic or hover_wand
+                     or (self.state == STATE_IDLE and self.click_action != CLICK_NONE))
         self.setCursor(Qt.CursorShape.PointingHandCursor if clickable else Qt.CursorShape.ArrowCursor)
 
     def enterEvent(self, event) -> None:
@@ -603,6 +690,7 @@ class FloatingPill(QWidget):
     def leaveEvent(self, event) -> None:
         self._hover = False
         self._hover_cancel = self._hover_finish = False
+        self._hover_mic = self._hover_wand = False
         self._apply_size_targets()
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.update()
@@ -626,14 +714,29 @@ class FloatingPill(QWidget):
             return
         self._on_clicked(event.position())
 
+    def _on_collapse_timeout(self) -> None:
+        if self.state in (STATE_PROCESSING, STATE_TYPING, STATE_SELECTION_PROCESSING):
+            logger.warning(f"Pill was still '{self.state}' after {BUSY_TIMEOUT_SECONDS:.0f}s - resetting it to idle.")
+        self._set_state(STATE_IDLE)
+
     def _on_clicked(self, pos) -> None:
         if self.state in (STATE_RECORDING, STATE_MIC_STARTING):
             if self._cancel_rect.contains(pos):
+                self._set_state(STATE_IDLE)  # instant feedback; the engine confirms it right after
                 self.cancel_dictation_requested.emit()
             elif self.state == STATE_RECORDING and self._finish_rect.contains(pos):
+                # Instant feedback on the tick: show the busy dots straight away instead of sitting on the
+                # waveform until the engine gets round to it. The engine/worker then drives the real states.
+                self._set_state(STATE_PROCESSING)
                 self.finish_dictation_requested.emit()
             return
         if self.state != STATE_IDLE:
+            return
+        if self._mic_rect.contains(pos):
+            self.toggle_dictation_requested.emit()  # the mic button always dictates, whatever "click the pill" is set to
+            return
+        if self._wand_rect.contains(pos):
+            self.transform_menu_requested.emit()
             return
         if self.click_action == CLICK_DICTATE:
             self.toggle_dictation_requested.emit()
@@ -653,6 +756,32 @@ class FloatingPill(QWidget):
         menu.addAction("Hide Pill", self.hide_pill_requested.emit)
         menu.addAction(f"Quit {APP_NAME} Completely", self.quit_requested.emit)
         menu.exec(event.globalPos())
+
+    # --- Transform menu --------------------------------------------------------
+
+    def popup_transform_menu(self, items, active_id, auto_apply, on_select, on_auto_toggle, on_configure) -> None:
+        """Open the wand's menu above the pill (below it if there's no room), keeping the pill expanded meanwhile."""
+        from src.ui.pill_menu import MENU_W, build_transform_menu
+
+        menu = build_transform_menu(self, items, active_id, auto_apply, on_select, on_auto_toggle, on_configure)
+        self._menu_open = True
+        self._apply_size_targets()
+        menu.aboutToHide.connect(self._on_menu_closed)
+        menu.ensurePolished()
+        size = menu.sizeHint()
+        geo = self._screen_geometry_at(QPointF(self.x() + self.width() / 2.0, self.y() + self.height() / 2.0))
+        x = int(self.x() + self.width() / 2.0 - max(size.width(), MENU_W) / 2.0)
+        x = max(geo.left() + 6, min(x, geo.right() - size.width() - 6))
+        y = self.y() - size.height() - 10
+        if y < geo.top() + 6:
+            y = self.y() + self.height() + 10
+        menu.popup(QPoint(x, y))
+
+    def _on_menu_closed(self) -> None:
+        self._menu_open = False
+        self._hover_wand = False
+        self._apply_size_targets()
+        self.update()
 
     # --- Visibility toggle (tray) --------------------------------------------
 
