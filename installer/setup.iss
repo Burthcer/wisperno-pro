@@ -68,6 +68,13 @@ WizardStyle=modern
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[InstallDelete]
+; Builds before v1.3.0 bundled all of PyTorch (about 3.6 GB) in _internal\torch; the app no longer uses it. An in-place
+; upgrade overwrites files but never removes ones a newer version stopped shipping, so without these lines every
+; upgraded PC would keep 3.6 GB of dead weight. Only these two folders are removed - never settings, history or models.
+Type: filesandordirs; Name: "{app}\_internal\torch"
+Type: filesandordirs; Name: "{app}\_internal\torchaudio"
+
 [Files]
 ; App binaries + PyInstaller runtime deps - always refreshed on upgrade.
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "config\*,models\*,logs\*"; Flags: ignoreversion recursesubdirs createallsubdirs
