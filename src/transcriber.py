@@ -305,7 +305,7 @@ class Transcriber:
         words: List[dict] = []
         for seg in segments:
             for w in (seg.words or []):
-                text = self.vocabulary.apply_replacements(w.word.strip())
+                text = unmask_profanity(self.vocabulary.apply_replacements(w.word.strip()))
                 if text:
                     words.append({"word": text, "start": w.start, "end": w.end})
         return words

@@ -11,10 +11,45 @@ from PySide6.QtGui import QIcon
 from src.config import get_base_dir
 
 
+def fallback_icon() -> QIcon:
+    """The logo drawn in code (orange tile, near-black waveform) - used if the icon file is ever missing or
+    fails to load, so the app never shows a blank or generic icon. Same geometry as scripts/make_icon.py."""
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPixmap
+
+    icon = QIcon()
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.scale(size / 256.0, size / 256.0)
+        grad = QLinearGradient(0, 12, 0, 244)
+        grad.setColorAt(0, QColor("#FF7A3D"))
+        grad.setColorAt(1, QColor(ACCENT_PRIMARY))
+        tile = QPainterPath()
+        tile.addRoundedRect(QRectF(12, 12, 232, 232), 58, 58)
+        p.fillPath(tile, grad)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(BG_APP))
+        x = (256 - (5 * 26 + 4 * 12)) / 2.0
+        for height in (66, 116, 162, 98, 58):
+            p.drawRoundedRect(QRectF(x, 128 - height / 2.0, 26, height), 13, 13)
+            x += 38
+        p.end()
+        icon.addPixmap(pix)
+    return icon
+
+
 def get_app_icon() -> QIcon:
-    """Resolve assets/icons/wisperno.ico next to the app root (frozen-safe)."""
+    """Resolve assets/icons/wisperno.ico next to the app root (frozen-safe); if it is missing or
+    can't be decoded, draw the logo instead - never a blank icon."""
     icon_path = get_base_dir() / "assets" / "icons" / "wisperno.ico"
-    return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
+    if icon_path.exists():
+        icon = QIcon(str(icon_path))
+        if not icon.isNull() and not icon.pixmap(32, 32).isNull():
+            return icon
+    return fallback_icon()
 
 # --- Floating pill ------------------------------------------------------
 # Same warm near-black as the dashboard (and devbhamaria.com); it floats over
@@ -83,8 +118,8 @@ VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF5714, stop:1 
 RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6B6962, stop:1 #AAA79E)"
 
 # System Usage: ring gauges (start, end colour) and the disk-space bar segments.
-GAUGE_VRAM = ("#FF5714", "#FF9A3D")
-GAUGE_RAM = ("#AAA79E", "#ECEBE6")
+GAUGE_TOTAL = ("#6B6962", "#AAA79E")   # everything using the resource
+GAUGE_APP = ("#FF5714", "#FF9A3D")     # Wisperno Pro's own share of it
 STORAGE_APP = "#FF5714"
 STORAGE_MODELS = "#E3C07A"
 STORAGE_HISTORY = "#6FCF97"

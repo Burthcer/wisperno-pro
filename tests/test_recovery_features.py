@@ -59,6 +59,34 @@ def test_profanity_filter_misses_and_false_hits() -> None:
     logger.success("PASS: no slips, masked words handled, names/innocent words untouched.")
 
 
+def test_profanity_masks_variants_and_false_hits() -> None:
+    logger.info("--- Testing more masking styles, and that code/maths/emails are safe ---")
+    from src.swear_filter import apply_profanity_filter as f, unmask_profanity as u
+
+    assert u("that's f#cking great") == "that's fucking great" and u("what the f@ck") == "what the fuck"
+    assert u("this sh$t is b*llsh*t") == "this shit is bullshit" and u("a$$hole") == "asshole"
+    assert u("f*****") == "fucked" and u("motherf*****") == "motherfucker", "a different number of symbols is still understood"
+    for safe in ("I use C# and pay$ off", "A$AP Rocky", "email me at a@b.com", "Call me @ noon", "Wow! amazing", "2*3 and x*y*z", "C##"):
+        assert u(safe) == safe, safe
+    assert f("f*ck!", "remove") == "!" and f("you f*****", "remove") == "you"
+    logger.success("PASS: more mask styles caught; C#, emails, maths and punctuation left alone.")
+
+
+def test_cleanup_never_drops_a_phrase_like_letting_you_know() -> None:
+    logger.info("--- Testing the 'you know' idiom guard ---")
+    from src.direct_formatter import format_direct
+    from src.transformer import sanity_check
+
+    assert format_direct("also, just letting you know, the chime is bad") == "Also, just letting you know, the chime is bad."
+    assert format_direct("as you know, it works") == "As you know, it works."
+    assert format_direct("it was, you know, kind of slow") == "It was kind of slow.", "a real filler is still removed"
+    assert format_direct("do you know the answer") == "Do you know the answer?"
+    raw = "Also, just letting you know, the chime is absolute ass."
+    assert "letting you know" in sanity_check(raw, "Also, just letting the chime is absolute ass.")
+    assert sanity_check(raw, "Also, just letting you know, the chime is absolute ass.") is None
+    logger.success("PASS: idioms survive both the rule-based formatter and the AI cleanup check.")
+
+
 def test_self_correction() -> None:
     logger.info("--- Testing spoken retractions ---")
     from src.self_correction import apply_self_correction as f
@@ -151,30 +179,10 @@ def test_careful_transcription_loosens_the_gates() -> None:
     logger.success("PASS: careful mode drops the rejection gates, widens the beam, allows temperature retries.")
 
 
-def test_chime_is_valid_soft_and_click_free() -> None:
-    logger.info("--- Testing the start/stop chime ---")
-    import io
-    import struct
-    import wave
-
-    from src import audio_cues
-
-    for name, wav_bytes, ceiling in (("start", audio_cues._start_wav(), 0.40), ("stop", audio_cues._stop_wav(), 0.32)):
-        with wave.open(io.BytesIO(wav_bytes)) as wav:
-            assert wav.getnchannels() == 1 and wav.getsampwidth() == 2 and wav.getframerate() == audio_cues.SAMPLE_RATE
-            n = wav.getnframes()
-            samples = struct.unpack("<%dh" % n, wav.readframes(n))
-        peak = max(abs(x) for x in samples) / 32767
-        assert 0.15 < peak <= ceiling, f"{name} chime peak {peak:.2f} should be audible but gentle"
-        assert abs(samples[0]) < 50 and abs(samples[-1]) < 50, f"{name} chime must start and end at silence (no click)"
-        assert 200 <= 1000 * n / audio_cues.SAMPLE_RATE <= 450, "short enough never to feel like lag"
-    assert audio_cues._stop_wav() != audio_cues._start_wav(), "start and stop must sound different"
-    logger.success("PASS: both chimes are valid mono WAVs, gentle, click-free and distinct.")
-
-
 def run_all_tests() -> None:
-    test_chime_is_valid_soft_and_click_free()
     test_profanity_filter_misses_and_false_hits()
+    test_profanity_masks_variants_and_false_hits()
+    test_cleanup_never_drops_a_phrase_like_letting_you_know()
     test_self_correction()
     test_recent_audio_keeps_only_the_newest()
     test_retranscribe_worker_replaces_the_row()

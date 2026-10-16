@@ -31,7 +31,7 @@ def build_icon() -> QIcon:
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     p.setPen(0)
-    p.setBrush(QColor(125, 87, 193))
+    p.setBrush(QColor(255, 87, 20))
     p.drawEllipse(6, 6, size - 12, size - 12)
     p.setBrush(QColor(245, 245, 247))
     p.drawEllipse(size // 2 - 9, size // 2 - 13, 18, 18)
@@ -92,6 +92,14 @@ class TrayIcon(QObject):
     def _on_activated(self, reason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.open_dashboard_requested.emit()
+
+    def ensure_visible(self) -> None:
+        """Re-assert the tray icon. If the app started before Explorer's tray was ready (typical at
+        sign-in with 'Start with Windows') the first show() can silently fail; calling this once the app
+        is fully up puts the icon there."""
+        self.icon.setIcon(build_icon())
+        if not self.icon.isVisible():
+            self.icon.show()
 
     def refresh(self) -> None:
         """Sync checkmarks with current controller state."""

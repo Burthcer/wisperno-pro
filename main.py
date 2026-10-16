@@ -172,7 +172,7 @@ class WispernoApp:
         self.engine.level_changed.connect(self.pill.set_level)
         self.engine.mode_changed.connect(self._on_mode_changed)
         self.engine.hotkey_changed.connect(self.pill.set_hotkey_label)
-        self.engine.engines_ready.connect(lambda ok: self.tray.refresh())
+        self.engine.engines_ready.connect(lambda ok: (self.tray.refresh(), self.tray.ensure_visible()))
         self.engine.settings_requested.connect(self.open_dashboard)
         self.engine.dashboard_toggle_requested.connect(self.toggle_dashboard)
         self.pill.dashboard_requested.connect(self.open_dashboard)

@@ -24,8 +24,13 @@ _MISSING_SPACE_RE = re.compile(r"([.!?:,])(?=[A-Za-z])")
 # "um"/"uh" are never words. "er"/"ah" and "you know" only count as filler
 # when punctuated as an aside ("Ah, I see", "it was, you know, bad") - bare,
 # they're content: "Do you know the answer?", "the ER diagram".
+# "you know" is NOT a filler inside an idiom: "letting you know, the build is ready", "as you know, ...".
+# The lookbehinds skip those; fixed-width ones, so each alternative is spelled out.
 _FILLER_RE = re.compile(
-    r"\b(?:u+h+|u+m+)\b,?\s*|\b(?:ah|er|you know)\b(?:\s*,\s*|(?=[.!?]))", re.IGNORECASE
+    r"\b(?:u+h+|u+m+)\b,?\s*"
+    r"|(?<!let )(?<!lets )(?<!letting )(?<!let's )(?<!as )(?<!did )(?<!if )"
+    r"\b(?:ah|er|you know)\b(?:\s*,\s*|(?=[.!?]))",
+    re.IGNORECASE,
 )
 _FILLER_LIKE_RE = re.compile(r"\blike,\s*", re.IGNORECASE)
 

@@ -372,7 +372,7 @@ class WispernoEngine(QObject):
         token = self._recording_token
         self.state_changed.emit(self._with_badge("mic_starting"))
         if self.config.audio_cues_enabled:
-            audio_cues.play_start_cue()
+            audio_cues.play_start_cue(self.config.cue_start_sound)
         if not self.audio_worker.start_recording():
             self._on_mic_failed("the microphone could not be opened")
             return
@@ -412,7 +412,7 @@ class WispernoEngine(QObject):
         self._pill_recording = False
         audio_array = self.audio_worker.stop_recording()
         if self.config.audio_cues_enabled:
-            audio_cues.play_stop_cue()  # after the mic closed, so the beep isn't recorded
+            audio_cues.play_stop_cue(self.config.cue_stop_sound)  # after the mic closed, so the sound isn't recorded
         # The captured-audio buffer's own length, not press-to-release wall-clock
         # time (which runs ~0.3-0.5s long from stream start/stop overhead and would
         # otherwise be what ends up stored as the history row's duration).
@@ -439,6 +439,7 @@ class WispernoEngine(QObject):
             trailing_space=self.config.injector.trailing_space,
             app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
             keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
+            auto_paragraphs=self.config.auto_paragraphs,
         )
         worker.recording_saved.connect(lambda _id: self.history_added.emit({}))  # History: show Re-transcribe
         worker.state_changed.connect(self.state_changed)
@@ -478,6 +479,10 @@ class WispernoEngine(QObject):
         self.config.keep_recent_recordings = int(count)
         self.save_config()
         recent_audio.prune(int(count))  # lowering the number deletes the extra clips now
+
+    def set_auto_paragraphs(self, enabled: bool) -> None:
+        self.config.auto_paragraphs = enabled
+        self.save_config()
 
     def set_self_correction(self, enabled: bool) -> None:
         self.config.self_correction = enabled
@@ -582,7 +587,7 @@ class WispernoEngine(QObject):
         self._active_transform_id = None
         audio_array = self.audio_worker.stop_recording()
         if self.config.audio_cues_enabled and audio_array is not None and len(audio_array) > 0:
-            audio_cues.play_stop_cue()  # skipped on a quick tap (no real recording) - see the selection-polish fallback below
+            audio_cues.play_stop_cue(self.config.cue_stop_sound)  # skipped on a quick tap (no real recording) - see the selection-polish fallback below
         # The captured-audio buffer's own length, not press-to-release wall-clock time - see _on_ptt_release.
         record_duration_ms = self.audio_worker.recorder.last_duration_seconds * 1000
         transform = self.db.get_transform(transform_id)
@@ -608,6 +613,7 @@ class WispernoEngine(QObject):
                 trailing_space=self.config.injector.trailing_space,
                 app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
                 keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
+                auto_paragraphs=self.config.auto_paragraphs,
             )
             worker.recording_saved.connect(lambda _id: self.history_added.emit({}))
         else:
@@ -848,6 +854,13 @@ class WispernoEngine(QObject):
 
     def set_audio_cues_enabled(self, enabled: bool) -> None:
         self.config.audio_cues_enabled = enabled
+        self.save_config()
+
+    def set_cue_sounds(self, start: str = None, stop: str = None) -> None:
+        if start is not None:
+            self.config.cue_start_sound = start
+        if stop is not None:
+            self.config.cue_stop_sound = stop
         self.save_config()
 
     def set_app_styles_enabled(self, enabled: bool) -> None:

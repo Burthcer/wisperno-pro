@@ -5,7 +5,7 @@
 ; which passes /DMyAppVersion=<version> read from src/__version__.py - never hardcode
 ; a version here, it would drift out of sync with the actual build.
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.3.0"
 #endif
 #define MyAppName "Wisperno Pro"
 #define MyAppPublisher "Wisperno Pro"
@@ -56,6 +56,9 @@ DiskSpanning=yes
 DiskSliceSize=1900000000
 SetupIconFile=..\assets\icons\wisperno.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
+; Tells Windows Explorer to refresh its icon cache when setup finishes, so the desktop and Start menu
+; shortcuts show the new logo straight away instead of the old (or a blank) one until the next sign-in.
+ChangesAssociations=yes
 ; Matches src/single_instance.py's actual MUTEX_NAME exactly - Setup detects
 ; a running instance and prompts to close it before continuing the upgrade.
 AppMutex=Local\WispernoPro_SingleInstance_Mutex_4417

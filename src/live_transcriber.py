@@ -37,6 +37,7 @@ from loguru import logger
 from src.audio_recorder import AudioRecorder
 from src.config import AudioConfig
 from src.direct_formatter import format_direct
+from src.swear_filter import apply_profanity_filter, unmask_profanity
 
 SAMPLE_RATE = 16000
 # Hop-based streaming (Round 34, replacing the old commit-on-pause-or-ceiling
@@ -331,8 +332,11 @@ class LiveTranscriptionWorker(QThread):
             return
 
         self.state_changed.emit("cleaning_up")
-        raw_text = " ".join(c for c in self._committed_chunks if c).strip()
+        raw_text = unmask_profanity(" ".join(c for c in self._committed_chunks if c).strip())
         cleaned = clean_live_transcript_llm(raw_text, self.transformer)
+        # The AI cleanup applies the profanity setting itself, but the rule-based fallback doesn't - so make sure it
+        # is applied once, here, whichever path produced the text.
+        cleaned = apply_profanity_filter(cleaned, getattr(self.transformer, "profanity_filter", "allow"))
         duration = time.perf_counter() - self._start_time
         self.session_stopped.emit({
             "raw": raw_text,

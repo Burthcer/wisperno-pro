@@ -240,7 +240,13 @@ class SystemMonitor:
         gpu_total_mb = gpu_used_mb = 0.0
         if self._gpu_handle is not None:
             try:
-                mem = pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle)
+                # The v2 struct reports the driver's own reserved memory separately; v1's "used"
+                # includes it, which made this read ~0.25 GB higher than Windows Task Manager's
+                # "Dedicated GPU memory". v2's "used" is what Task Manager shows.
+                try:
+                    mem = pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle, pynvml.nvmlMemory_v2)
+                except Exception:
+                    mem = pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle)
                 gpu_total_mb = mem.total / 1024 / 1024
                 gpu_used_mb = mem.used / 1024 / 1024
             except Exception as e:
@@ -267,6 +273,9 @@ class SystemMonitor:
                     f"- showing the load-time figure instead. Counter instances for this PID: "
                     f"{', '.join(breakdown) or 'none'}"
                 )
+
+        if gpu_used_mb:
+            app_vram_mb = min(app_vram_mb, gpu_used_mb)  # the app can't hold more than the whole GPU has in use
 
         gpu_util_pct = 0
         gpu_temp_c = None

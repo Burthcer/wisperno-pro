@@ -8,7 +8,7 @@ import os
 
 from PySide6.QtCore import QRectF, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from src import storage_usage
 from src.config import get_app_data_dir, get_base_dir
@@ -20,23 +20,36 @@ from src.ui.scroll_utils import make_scrollable_layout
 _STORAGE_PARTS = (
     ("app", "Application files", theme.STORAGE_APP),
     ("models", "AI models", theme.STORAGE_MODELS),
-    ("history", "History database", theme.STORAGE_HISTORY),
+    ("history", "History", theme.STORAGE_HISTORY),
     ("recordings", "Saved recordings", theme.STORAGE_RECORDINGS),
 )
+# What each part is, and whether you can delete it here. The first two are the installation itself.
+_STORAGE_NOTES = {
+    "app": "Program files - part of the installation",
+    "models": "Speech and language models the app needs to work",
+    "history": "Your saved dictations and their text",
+    "recordings": "Audio kept so History can re-transcribe",
+}
+_DELETABLE = {"history", "recordings"}
 
 
 class _Gauge(QWidget):
-    """A 270-degree ring with the percentage in the middle. Turns red above 85%."""
+    """A 270-degree ring: grey for everything using the resource, with an orange arc
+    for Wisperno Pro's own share of it, and the total percentage in the middle.
+    The grey turns red above 85%."""
 
-    def __init__(self, color_a: str, color_b: str, size: int = 124):
+    def __init__(self, size: int = 124):
         super().__init__()
-        self._a, self._b = QColor(color_a), QColor(color_b)
+        self._total_a, self._total_b = QColor(theme.GAUGE_TOTAL[0]), QColor(theme.GAUGE_TOTAL[1])
+        self._app_a, self._app_b = QColor(theme.GAUGE_APP[0]), QColor(theme.GAUGE_APP[1])
         self._fraction = 0.0
+        self._app_fraction = 0.0
         self._text = "--"
         self.setFixedSize(size, size)
 
-    def set_value(self, fraction: float, text: str) -> None:
+    def set_value(self, fraction: float, text: str, app_fraction: float = 0.0) -> None:
         self._fraction = max(0.0, min(1.0, fraction))
+        self._app_fraction = max(0.0, min(self._fraction, app_fraction))  # the app's share is part of the total
         self._text = text
         self.update()
 
@@ -56,12 +69,20 @@ class _Gauge(QWidget):
                 pen = QPen(QColor(theme.DANGER), width)
             else:
                 grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-                grad.setColorAt(0, self._a)
-                grad.setColorAt(1, self._b)
+                grad.setColorAt(0, self._total_a)
+                grad.setColorAt(1, self._total_b)
                 pen = QPen(grad, width)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(pen)
             p.drawArc(rect, start, int(span * self._fraction))
+        if self._app_fraction > 0:
+            grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+            grad.setColorAt(0, self._app_a)
+            grad.setColorAt(1, self._app_b)
+            pen = QPen(grad, width)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawArc(rect, start, int(span * max(self._app_fraction, 0.012)))  # always a visible sliver
         p.setPen(QColor(theme.TEXT_PRIMARY))
         font = QFont("Inter Tight")
         font.setPixelSize(int(h * 0.22))
@@ -133,6 +154,20 @@ def _muted(text: str = "") -> QLabel:
     return label
 
 
+def _legend_line(color: str) -> tuple:
+    """A coloured dot and a label: (layout, label) - the label text is set on every refresh."""
+    line = QHBoxLayout()
+    line.setSpacing(8)
+    dot = QLabel()
+    dot.setFixedSize(9, 9)
+    dot.setStyleSheet(f"background-color: {color}; border-radius: 4px;")
+    line.addWidget(dot, alignment=Qt.AlignVCenter)
+    text = QLabel("")
+    text.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 9pt; background: transparent;")
+    line.addWidget(text, 1)
+    return line, text
+
+
 def _big(text: str = "") -> QLabel:
     label = QLabel(text)
     label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-family: {theme.FONT_FAMILY_DISPLAY}; font-size: 15pt; font-weight: 600; background: transparent;")
@@ -173,15 +208,17 @@ class SystemUsageTab(QWidget):
         vram_card, vl = _card()
         row = QHBoxLayout()
         row.setSpacing(20)
-        self.vram_gauge = _Gauge(*theme.GAUGE_VRAM)
+        self.vram_gauge = _Gauge()
         row.addWidget(self.vram_gauge)
         col = QVBoxLayout()
         col.setSpacing(4)
         col.addWidget(_caption("GRAPHICS MEMORY"))
         self.vram_main = _big("Reading...")
         col.addWidget(self.vram_main)
-        self.vram_label = _muted("")
-        col.addWidget(self.vram_label)
+        self.vram_app_line, self.vram_app_text = _legend_line(theme.GAUGE_APP[0])
+        self.vram_other_line, self.vram_other_text = _legend_line(theme.GAUGE_TOTAL[1])
+        col.addLayout(self.vram_app_line)
+        col.addLayout(self.vram_other_line)
         self.vram_sub_label = _muted("")
         col.addWidget(self.vram_sub_label)
         col.addStretch()
@@ -192,15 +229,17 @@ class SystemUsageTab(QWidget):
         ram_card, rl = _card()
         row = QHBoxLayout()
         row.setSpacing(20)
-        self.ram_gauge = _Gauge(*theme.GAUGE_RAM)
+        self.ram_gauge = _Gauge()
         row.addWidget(self.ram_gauge)
         col = QVBoxLayout()
         col.setSpacing(4)
         col.addWidget(_caption("MEMORY (RAM)"))
         self.ram_main = _big("Reading...")
         col.addWidget(self.ram_main)
-        self.ram_label = _muted("")
-        col.addWidget(self.ram_label)
+        self.ram_app_line, self.ram_app_text = _legend_line(theme.GAUGE_APP[0])
+        self.ram_other_line, self.ram_other_text = _legend_line(theme.GAUGE_TOTAL[1])
+        col.addLayout(self.ram_app_line)
+        col.addLayout(self.ram_other_line)
         self.ram_sub_label = _muted("")
         col.addWidget(self.ram_sub_label)
         col.addStretch()
@@ -236,21 +275,45 @@ class SystemUsageTab(QWidget):
         self.disk_bar = _SegmentBar()
         dl.addWidget(self.disk_bar)
         self._legend_sizes = {}
+        self.delete_buttons = {}
         for key, label, color in _STORAGE_PARTS:
             line = QHBoxLayout()
+            line.setSpacing(10)
             dot = QLabel()
             dot.setFixedSize(10, 10)
             dot.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
-            line.addWidget(dot)
+            line.addWidget(dot, alignment=Qt.AlignVCenter)
+            text = QVBoxLayout()
+            text.setSpacing(0)
             name = QLabel(label)
-            name.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; background: transparent;")
-            line.addWidget(name)
-            line.addStretch()
+            name.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-weight: 600; background: transparent;")
+            text.addWidget(name)
+            text.addWidget(_muted(_STORAGE_NOTES[key]))
+            line.addLayout(text, 1)
             size = QLabel("")
-            size.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-family: {theme.FONT_FAMILY_MONO}; background: transparent;")
+            size.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-family: {theme.FONT_FAMILY_MONO}; background: transparent;")
             line.addWidget(size)
+            if key in _DELETABLE:
+                btn = QPushButton("Delete...")
+                btn.setObjectName("danger")
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setFixedWidth(96)
+                btn.clicked.connect(lambda _c=False, k=key: self._delete_part(k))
+                line.addWidget(btn)
+                self.delete_buttons[key] = btn
+            else:
+                locked = QLabel("Can't delete")
+                locked.setFixedWidth(96)
+                locked.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                locked.setToolTip("Part of the installation. Uninstall Wisperno Pro from Windows Settings -> Apps to remove it.")
+                locked.setStyleSheet(f"color: {theme.TEXT_PLACEHOLDER}; font-size: 9pt; background: transparent;")
+                line.addWidget(locked)
             dl.addLayout(line)
             self._legend_sizes[key] = size
+        dl.addWidget(_muted(
+            "Application files and AI models can't be deleted from here - they are the app itself. "
+            "To remove them, uninstall Wisperno Pro in Windows Settings -> Apps."
+        ))
         layout.addWidget(disk_card)
 
         layout.addStretch()
@@ -284,27 +347,30 @@ class SystemUsageTab(QWidget):
 
         if gpu_total_gb > 0:
             pct = gpu_used_gb / gpu_total_gb
-            self.vram_gauge.set_value(pct, f"{pct * 100:.0f}%")
-            self.vram_main.setText(f"{gpu_used_gb:.1f} of {gpu_total_gb:.1f} GB")
-            wisperno_txt = f"Wisperno Pro uses {app_vram_gb:.1f} GB"
+            self.vram_gauge.set_value(pct, f"{pct * 100:.0f}%", app_vram_gb / gpu_total_gb)
+            self.vram_main.setText(f"{gpu_used_gb:.1f} of {gpu_total_gb:.1f} GB in use")
+            wisperno_txt = f"Wisperno Pro  {app_vram_gb:.1f} GB"
             if snap["app_vram_source"] != "per-process counter":
                 wisperno_txt += " (estimated)"
             if snap["app_shared_mb"] >= 100:
                 wisperno_txt += f", plus {snap['app_shared_mb'] / 1024:.1f} GB spilled into system RAM"
-            self.vram_label.setText(wisperno_txt)
+            self.vram_app_text.setText(wisperno_txt)
+            self.vram_other_text.setText(f"Everything else  {max(gpu_used_gb - app_vram_gb, 0.0):.1f} GB")
             util_txt = f"{snap['gpu_util_pct']}%" if snap["gpu_util_pct"] is not None else "n/a"
             temp_txt = f"{snap['gpu_temp_c']}°C" if snap["gpu_temp_c"] is not None else "n/a"
             self.vram_sub_label.setText(f"Graphics load {util_txt}  -  {temp_txt}")
         else:
             self.vram_gauge.set_value(0, "--")
             self.vram_main.setText("No NVIDIA GPU found")
-            self.vram_label.setText("Running in CPU compatibility mode.")
+            self.vram_app_text.setText("Running in CPU compatibility mode.")
+            self.vram_other_text.setText("")
             self.vram_sub_label.setText("")
 
         pct = ram_used_gb / ram_total_gb if ram_total_gb > 0 else 0.0
-        self.ram_gauge.set_value(pct, f"{pct * 100:.0f}%")
-        self.ram_main.setText(f"{ram_used_gb:.1f} of {ram_total_gb:.1f} GB")
-        self.ram_label.setText(f"Wisperno Pro uses {app_ram_gb:.1f} GB  -  {ram_free_gb:.1f} GB free on this PC")
+        self.ram_gauge.set_value(pct, f"{pct * 100:.0f}%", app_ram_gb / ram_total_gb if ram_total_gb > 0 else 0.0)
+        self.ram_main.setText(f"{ram_used_gb:.1f} of {ram_total_gb:.1f} GB in use")
+        self.ram_app_text.setText(f"Wisperno Pro  {app_ram_gb:.1f} GB")
+        self.ram_other_text.setText(f"Everything else  {max(ram_used_gb - app_ram_gb, 0.0):.1f} GB  -  {ram_free_gb:.1f} GB free")
         self.ram_sub_label.setText(f"Processor load {snap['cpu_util_pct']:.0f}%  -  {snap['thread_count']} threads")
 
         self._refresh_engine_card()
@@ -359,6 +425,29 @@ class SystemUsageTab(QWidget):
         for key, _, _ in _STORAGE_PARTS:
             value = info.get(key)
             self._legend_sizes[key].setText("-" if value is None else storage_usage.format_bytes(value))
+
+    def _delete_part(self, key: str) -> None:
+        """Delete history or kept recordings, after a clear confirmation. Nothing else can be deleted here."""
+        if key == "history":
+            question = "Delete all of your dictation history?\n\nPinned entries are kept. This can't be undone."
+            title = "Delete history"
+        else:
+            question = ("Delete all saved recordings?\n\nHistory's Re-transcribe button needs these. "
+                        "New recordings are kept again as you dictate. This can't be undone.")
+            title = "Delete saved recordings"
+        confirm = QMessageBox.question(
+            self, title, question, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        if key == "history":
+            self.engine.db.clear_oldest_transcripts(fraction=1.0)  # every unpinned entry
+        else:
+            storage_usage.delete_recordings()
+        if hasattr(self.engine, "history_added"):
+            self.engine.history_added.emit({})  # History re-reads the list (and drops Re-transcribe buttons)
+        self.refresh_storage()
 
     def _open_install_folder(self) -> None:
         folder = get_base_dir()

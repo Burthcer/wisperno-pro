@@ -75,5 +75,24 @@ def storage_breakdown(base_dir: Optional[Path] = None, data_dir: Optional[Path] 
     return {"app": app, "models": models, "history": history, "recordings": recordings, "free": free}
 
 
+def delete_recordings(data_dir: Optional[Path] = None) -> int:
+    """Delete every kept recording (the recent clips History can re-transcribe, and any test
+    recordings). Returns the bytes freed. Only files inside those two folders are touched."""
+    data_dir = Path(data_dir) if data_dir is not None else get_app_data_dir()
+    freed = 0
+    for folder in (data_dir / "recent_audio", data_dir / "recordings"):
+        if not folder.is_dir():
+            continue
+        for entry in folder.iterdir():
+            try:
+                if entry.is_file():
+                    size = entry.stat().st_size
+                    entry.unlink()
+                    freed += size
+            except OSError:
+                continue
+    return freed
+
+
 def total_bytes(breakdown: Dict[str, Optional[int]]) -> int:
     return sum(int(breakdown[k] or 0) for k in ("app", "models", "history", "recordings"))

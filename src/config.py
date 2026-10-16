@@ -215,7 +215,13 @@ class AppConfig(BaseModel):
         default=None,
         description="Remembered [x, y] centre of the pill after you drag it; unset = bottom centre of the main screen.",
     )
-    audio_cues_enabled: bool = Field(default=False, description="Play a short tone when dictation starts and stops")
+    audio_cues_enabled: bool = Field(default=False, description="Play a short sound when dictation starts and stops")
+    cue_start_sound: str = Field(
+        default="soft_pop",
+        description="Sound for 'starts listening': a preset id (soft_pop, droplet, wood_tap, marimba, glass_tick, soft_click, chime), "
+                    "'none', or 'custom:<file name>' for a .wav you added in Settings -> Sounds.",
+    )
+    cue_stop_sound: str = Field(default="soft_pop", description="Sound for 'stops listening' (same ids as cue_start_sound).")
     app_styles_enabled: bool = Field(
         default=True,
         description="Format dictation for the app it's typed into (see src/app_context.py): chat apps drop "
@@ -224,6 +230,11 @@ class AppConfig(BaseModel):
     app_styles: Dict[str, str] = Field(
         default_factory=lambda: dict(DEFAULT_APP_STYLES),
         description="App executable name (lowercase, e.g. 'slack.exe') -> 'default' | 'messaging' | 'code'.",
+    )
+    auto_paragraphs: bool = Field(
+        default=True,
+        description="Split a long dictation into paragraphs where the topic changes (src/paragraphing.py). "
+                    "Only in normal-sentence apps, never in chat apps, editors or terminals.",
     )
     keep_recent_recordings: int = Field(
         default=3, ge=0, le=10,

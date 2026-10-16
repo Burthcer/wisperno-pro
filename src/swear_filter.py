@@ -53,19 +53,42 @@ _PROFANITY_RE = re.compile(
 # "f***"). Those must count as the word that was said: a filter that only knows
 # the plain spelling lets every one of them through, and "Allow" would otherwise
 # hand back the model's asterisks instead of the speaker's word.
-_MASKED_RE = re.compile(r"(?<![\w*])([A-Za-z][A-Za-z*]*\*[A-Za-z*]*)'?(?![\w*])")
+_MASK_CHARS = "*#@$%"
+_MASKED_RE = re.compile(
+    r"(?<![\w*#@$%])([A-Za-z][A-Za-z*#@$%]*[*#@$%][A-Za-z*#@$%]*)'?(?![\w*#@$%])"
+)
 
 _START_MARK = "\x00"  # marks where a sentence lost its first word (remove mode)
 
 
 def _unmask_token(token: str) -> Optional[str]:
-    """The profanity word a masked token stands for (same length, every visible
-    letter equal), or None. The most common word wins when several fit ("s**t")."""
+    """The profanity word a masked token stands for, or None. First choice: same length with every
+    visible letter in place ("f**king"). If the model masked with a different number of symbols
+    ("f*****" for "fucked"), fall back to a word that starts with the same letter, contains the visible
+    letters in order and is within two letters of the token's length. The most common word wins ties."""
     t = token.lower()
     for word in _PROFANITY_WORDS:
-        if len(word) == len(t) and all(c == "*" or c == word[i] for i, c in enumerate(t)):
+        if len(word) == len(t) and all(c in _MASK_CHARS or c == word[i] for i, c in enumerate(t)):
             return word
-    return None
+    visible = [c for c in t if c not in _MASK_CHARS]
+    # The loose match is only for clearly masked words: "C#" or "A$AP" must never become a swear word.
+    if not t[0].isalpha() or len(t) < 4 or len(t) - len(visible) < 2:
+        return None
+    best, best_gap = None, 3
+    for word in _PROFANITY_WORDS:
+        gap = abs(len(word) - len(t))
+        if gap > 2 or word[0] != t[0] or gap >= best_gap:
+            continue
+        pos, ok = 0, True
+        for c in visible:
+            pos = word.find(c, pos)
+            if pos < 0:
+                ok = False
+                break
+            pos += 1
+        if ok and (t[-1] in _MASK_CHARS or word[-1] == t[-1]):
+            best, best_gap = word, gap
+    return best
 
 
 def unmask_profanity(text: str) -> str:

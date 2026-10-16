@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
 )
 
+from src import audio_cues
 from src.app_context import STYLE_LABELS, STYLES
 from src.presets import BENCHMARK_MATRIX, DEFAULT_PRESET, MODEL_PRESETS
 from src.ui import theme
@@ -172,7 +173,7 @@ class SettingsTab(QWidget):
         self.advanced_tab = _AdvancedSettings(engine)
         pages = dict(self.general_tab.pages)
         pages["AI Engine"] = self.advanced_tab
-        order = ["Microphone", "Shortcuts", "Writing", "Pill", "App Styles", "AI Engine", "Privacy", "Startup"]
+        order = ["Microphone", "Shortcuts", "Writing", "Pill", "Sounds", "App Styles", "AI Engine", "Privacy", "Startup"]
         for name in order:
             self.sub_tabs.addTab(pages[name], name)
         self._pages = [pages[name] for name in order]
@@ -255,6 +256,60 @@ def _check_row(checkbox: QCheckBox, hint: str = "") -> QWidget:
     return row
 
 
+class _SoundDropZone(QFrame):
+    """A dashed box you can drag a .wav onto (or click to browse). Hands the file path to `on_file`;
+    every check on the file itself lives in audio_cues.import_custom."""
+
+    def __init__(self, on_file):
+        super().__init__()
+        self._on_file = on_file
+        self.setObjectName("soundDrop")
+        self.setAcceptDrops(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(96)
+        self._set_hot(False)
+        v = QVBoxLayout(self)
+        v.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        head = QLabel("Drop a .wav file here")
+        head.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        head.setStyleSheet(f"font-weight: 600; color: {theme.TEXT_PRIMARY}; background: transparent;")
+        sub = QLabel("or click to choose one - " + audio_cues.describe_limits())
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 9pt; background: transparent;")
+        v.addWidget(head)
+        v.addWidget(sub)
+
+    def _set_hot(self, hot: bool) -> None:
+        border = theme.ACCENT_PRIMARY if hot else theme.BORDER_STRONG
+        self.setStyleSheet(
+            f"#soundDrop {{ background-color: {theme.BG_APP}; border: 2px dashed {border}; border-radius: 12px; }}"
+        )
+
+    @staticmethod
+    def _wav_paths(mime) -> list:
+        return [u.toLocalFile() for u in mime.urls() if u.isLocalFile()]
+
+    def dragEnterEvent(self, event) -> None:
+        if self._wav_paths(event.mimeData()):
+            event.acceptProposedAction()
+            self._set_hot(True)
+
+    def dragLeaveEvent(self, event) -> None:
+        self._set_hot(False)
+
+    def dropEvent(self, event) -> None:
+        self._set_hot(False)
+        paths = self._wav_paths(event.mimeData())
+        event.acceptProposedAction()
+        for path in paths[:1]:  # one sound at a time
+            self._on_file(path)
+
+    def mouseReleaseEvent(self, event) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Choose a sound", "", "WAV sounds (*.wav)")
+        if path:
+            self._on_file(path)
+
+
 class _GeneralSettings(QWidget):
     """Everyday controls, grouped into topic pages (Microphone, Shortcuts, Writing, Pill,
     App Styles, Privacy, Startup). This object only owns the widgets and their handlers;
@@ -276,10 +331,11 @@ class _GeneralSettings(QWidget):
             self.pages[name] = widget
             return lay
 
-        mic = page("Microphone", "Which microphone to listen to, when to stop, and the sound that tells you it's listening.")
+        mic = page("Microphone", "Which microphone to listen to, and when to stop listening.")
         keys = page("Shortcuts", "Start and stop dictation from the keyboard. More hotkeys (transforms, live transcription) are in the Transforms tab and the README.")
         writing = page("Writing", "How your words are cleaned up and typed.")
         pill = page("Pill", "The small floating control that shows what Wisperno is doing - and starts and stops dictation when you click it.")
+        sounds = page("Sounds", "Optional sounds that tell you Wisperno Pro started or stopped listening. Pick a built-in sound or add your own.")
         apps = page("App Styles", "Different apps want different punctuation: chat apps drop the final period, code editors skip the trailing space.")
         privacy = page("Privacy", "Everything stays on this PC. Choose what is kept, for how long, and how much space it uses.")
         startup = page("Startup", "How Wisperno Pro starts and what the window's close button does.")
@@ -335,13 +391,40 @@ class _GeneralSettings(QWidget):
         v.addWidget(_row("Stop after a pause of", "When you go quiet for this long, recording ends and the text is typed.", self.auto_silence_cb))
         mic.addWidget(g)
 
-        g, v = _group("Sounds")
-        self.audio_cues_cb = QCheckBox("Play a soft chime when dictation starts and stops")
+        mic.addStretch()
+
+        # ---------- Sounds ----------
+        g, v = _group("Dictation sounds")
+        self.audio_cues_cb = QCheckBox("Play a sound when dictation starts and stops")
         self.audio_cues_cb.setChecked(engine.config.audio_cues_enabled)
         self.audio_cues_cb.stateChanged.connect(lambda s: engine.set_audio_cues_enabled(s != 0))
-        v.addWidget(_check_row(self.audio_cues_cb, "A short two-note chime: rising when it starts listening, falling when it stops."))
-        mic.addWidget(g)
-        mic.addStretch()
+        v.addWidget(_check_row(self.audio_cues_cb, "Off by default. Use the Preview buttons to hear each sound."))
+        self.start_sound_cb = _no_wheel(QComboBox())
+        self.stop_sound_cb = _no_wheel(QComboBox())
+        self._fill_sound_combos()
+        self.start_sound_cb.currentIndexChanged.connect(lambda _i: self._on_sound_changed("start"))
+        self.stop_sound_cb.currentIndexChanged.connect(lambda _i: self._on_sound_changed("stop"))
+        for label, hint, combo, kind in (
+            ("When it starts listening", "Played as the microphone opens.", self.start_sound_cb, "start"),
+            ("When it stops", "Played when you finish.", self.stop_sound_cb, "stop"),
+        ):
+            preview = QPushButton("Preview")
+            preview.clicked.connect(lambda _c=False, k=kind: self._preview_sound(k))
+            control = QHBoxLayout()
+            control.addWidget(combo, 1)
+            control.addWidget(preview)
+            v.addWidget(_row(label, hint, control))
+        sounds.addWidget(g)
+
+        g, v = _group("Your own sound", f"Drag a sound onto the box below, or choose a file. {audio_cues.describe_limits()}. Bigger or longer files are refused.")
+        self.sound_drop_zone = _SoundDropZone(self._add_custom_sound)
+        v.addWidget(self.sound_drop_zone)
+        self.custom_sounds_box = QVBoxLayout()
+        self.custom_sounds_box.setSpacing(6)
+        v.addLayout(self.custom_sounds_box)
+        self._refresh_custom_sounds()
+        sounds.addWidget(g)
+        sounds.addStretch()
 
         # ---------- Shortcuts ----------
         # Two fully independent cards, each with its own recorder and enable switch.
@@ -390,6 +473,14 @@ class _GeneralSettings(QWidget):
         self.auto_llm_polish_cb.stateChanged.connect(lambda s: engine.set_auto_llm_polish(s != 0))
         v.addWidget(_check_row(self.auto_llm_polish_cb, "Removes filler words, fixes \"wait no\" corrections and formats lists. "
                                                         "Short, clean phrases stay instant. Turn off for rule-based formatting only."))
+        self.auto_paragraphs_cb = QCheckBox("Split long dictation into paragraphs")
+        self.auto_paragraphs_cb.setChecked(engine.config.auto_paragraphs)
+        self.auto_paragraphs_cb.stateChanged.connect(lambda s: engine.set_auto_paragraphs(s != 0))
+        v.addWidget(_check_row(
+            self.auto_paragraphs_cb,
+            "Talk for a minute without pausing and the text is broken into paragraphs where the topic changes - no words are "
+            "changed or dropped. Only in normal writing apps, never in chat apps, code editors or terminals.",
+        ))
         self.auto_copy_cb = QCheckBox("Also copy the text to the clipboard")
         self.auto_copy_cb.setChecked(engine.config.injector.auto_copy_to_clipboard)
         self.auto_copy_cb.stateChanged.connect(lambda s: engine.set_auto_copy_to_clipboard(s != 0))
@@ -616,6 +707,91 @@ class _GeneralSettings(QWidget):
     def _remove_app_style(self, app: str) -> None:
         self.engine.set_app_style(app, None)
         self._refresh_app_styles()
+
+    # ---- sounds ----
+    def _sound_ids(self) -> list:
+        ids = [(sid, label) for sid, (label, _b) in audio_cues.PRESETS.items()]
+        ids += [(audio_cues.custom_id(name), audio_cues.label_for(audio_cues.custom_id(name))) for name in audio_cues.list_custom()]
+        ids.append((audio_cues.NONE_ID, "No sound"))
+        return ids
+
+    def _fill_sound_combos(self) -> None:
+        for combo, current in ((self.start_sound_cb, self.engine.config.cue_start_sound),
+                               (self.stop_sound_cb, self.engine.config.cue_stop_sound)):
+            combo.blockSignals(True)
+            combo.clear()
+            for sid, label in self._sound_ids():
+                combo.addItem(label, sid)
+            idx = combo.findData(current)
+            combo.setCurrentIndex(idx if idx >= 0 else combo.findData(audio_cues.DEFAULT_SOUND))
+            combo.blockSignals(False)
+
+    def _on_sound_changed(self, kind: str) -> None:
+        combo = self.start_sound_cb if kind == "start" else self.stop_sound_cb
+        if kind == "start":
+            self.engine.set_cue_sounds(start=combo.currentData())
+        else:
+            self.engine.set_cue_sounds(stop=combo.currentData())
+        self._preview_sound(kind)  # hearing it right after choosing it is the whole point
+
+    def _preview_sound(self, kind: str) -> None:
+        combo = self.start_sound_cb if kind == "start" else self.stop_sound_cb
+        audio_cues.play(combo.currentData(), kind)
+
+    def _add_custom_sound(self, path: str) -> None:
+        """Called with a dropped/chosen file. Rejects anything too big/long/odd with a plain message."""
+        try:
+            sound_id = audio_cues.import_custom(path)
+        except ValueError as e:
+            QMessageBox.warning(self, "Can't use that sound", str(e))
+            return
+        self._fill_sound_combos()
+        self._refresh_custom_sounds()
+        box = QMessageBox(self)
+        box.setWindowTitle("Sound added")
+        box.setText(f"Added \"{audio_cues.label_for(sound_id)}\".\nUse it for:")
+        start_btn = box.addButton("Start", QMessageBox.ButtonRole.AcceptRole)
+        stop_btn = box.addButton("Stop", QMessageBox.ButtonRole.AcceptRole)
+        both_btn = box.addButton("Both", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Just add it", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked in (start_btn, both_btn):
+            self.start_sound_cb.setCurrentIndex(self.start_sound_cb.findData(sound_id))
+        if clicked in (stop_btn, both_btn):
+            self.stop_sound_cb.setCurrentIndex(self.stop_sound_cb.findData(sound_id))
+
+    def _refresh_custom_sounds(self) -> None:
+        while self.custom_sounds_box.count():
+            item = self.custom_sounds_box.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for name in audio_cues.list_custom():
+            sound_id = audio_cues.custom_id(name)
+            row = QWidget()
+            row.setStyleSheet("background: transparent;")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.addWidget(QLabel(audio_cues.label_for(sound_id)), 1)
+            play = QPushButton("Play")
+            play.clicked.connect(lambda _c=False, s=sound_id: audio_cues.play(s, "start"))
+            remove = QPushButton("Remove")
+            remove.setObjectName("danger")
+            remove.clicked.connect(lambda _c=False, s=sound_id: self._remove_custom_sound(s))
+            h.addWidget(play)
+            h.addWidget(remove)
+            self.custom_sounds_box.addWidget(row)
+
+    def _remove_custom_sound(self, sound_id: str) -> None:
+        audio_cues.remove_custom(sound_id)
+        for kind, combo in (("start", self.start_sound_cb), ("stop", self.stop_sound_cb)):
+            if combo.currentData() == sound_id:  # in use: fall back to the default before it disappears
+                if kind == "start":
+                    self.engine.set_cue_sounds(start=audio_cues.DEFAULT_SOUND)
+                else:
+                    self.engine.set_cue_sounds(stop=audio_cues.DEFAULT_SOUND)
+        self._fill_sound_combos()
+        self._refresh_custom_sounds()
 
     def _refresh_storage_stats(self) -> None:
         stats = self.engine.db.get_database_storage_stats()

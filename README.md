@@ -85,6 +85,7 @@ typing into. It stays tiny while idle and grows only when something happens.
 - **Per-app styles.** Chat apps (Discord, Slack, Teams...) drop the final period;
   code editors and terminals also skip the trailing space. Add your own apps.
 - **Paragraphs from pauses.** A pause of about 1.3 seconds starts a new paragraph.
+- **Paragraphs from topics.** Talk for a minute without pausing and the wall of text is split where the topic changes (a transition like "Also," or "Finally," helps, and so does a change of vocabulary). No words are changed or dropped, and it only happens in normal writing apps - never in chat apps, code editors or terminals. Turn it off in Settings -> Writing.
 - **Spoken domains.** "visit dev dot to slash janedoe" types `visit dev.to/janedoe`;
   "put a dot in the middle" keeps the word *dot*.
 - **Lists spoken across pauses.** "I will answer both of your questions... *(pause)*
@@ -157,22 +158,23 @@ can silently delete real content. It is **off by default**, and the original wor
 - **System Usage** - ring gauges for graphics memory and RAM (with Wisperno's own share), the active engines, and a disk-space breakdown. See [System Usage and disk space](#system-usage-and-disk-space).
 - **Two engine presets** - *Turbo Flagship* (default, Qwen2.5-1.5B, ~110 tokens/s) and *Standard*
   (Llama-3.2-3B, most consistent cleanup). See [BENCHMARKS.md](BENCHMARKS.md).
-- **A soft start/stop chime** (optional): a gentle rising two-note chime when it starts listening, falling when it stops.
+- **Start/stop sounds** (optional, Settings -> Sounds): pick from seven built-in sounds (Soft pop, Droplet, Wood tap, Marimba, Glass tick, Soft click, Chime) with a Preview button, or **drag your own .wav onto the box** - it is copied into the app. Files must be a WAV up to 3 seconds and 1 MB; anything bigger or longer is refused with a clear message.
 - Start with Windows, minimise to tray, always-on-top pill (including over fullscreen apps).
 - **A dark, warm-black theme** with one orange accent, taken from devbhamaria.com, with Inter
   Tight and JetBrains Mono bundled.
 
 ## Settings tour
 
-Settings is split into eight clearly named tabs. Everything saves the moment you change it,
+Settings is split into nine clearly named tabs. Everything saves the moment you change it,
 except **AI Engine**, which has an *Apply changes* button because it reloads the models.
 
 | Tab | What is in it |
 |---|---|
-| **Microphone** | Input device, a 3-second mic test with a live level meter, auto-stop after a pause, and the optional start/stop chime |
+| **Microphone** | Input device, a 3-second mic test with a live level meter, and auto-stop after a pause |
 | **Shortcuts** | Tap-to-toggle and hold-to-talk keys (click a box, press the keys you want) |
-| **Writing** | Smart cleanup, copy to clipboard, trailing space, the profanity filter, and "scratch that" retractions |
+| **Writing** | Smart cleanup, automatic paragraphs for long dictation, copy to clipboard, trailing space, the profanity filter, and "scratch that" retractions |
 | **Pill** | Show/hide, always on top, what a click does, shape (Pill or Box), position presets and Reset |
+| **Sounds** | Optional start/stop sounds: seven built-in ones with a Preview button, or drag in your own .wav |
 | **App Styles** | Per-app punctuation rules (chat apps, code editors...), with your own apps added |
 | **AI Engine** | Engine preset (Turbo Flagship / Standard), Whisper model, pause sensitivity, GPU layers |
 | **Privacy** | How many recent recordings to keep, history auto-delete, storage used, testing recordings |
@@ -183,6 +185,8 @@ except **AI Engine**, which has an *Apply changes* button because it reloads the
 ![Writing](docs/images/settings-writing.png)
 
 ![Pill](docs/images/settings-pill.png)
+
+![Sounds](docs/images/settings-sounds.png)
 
 ![AI Engine](docs/images/settings-ai-engine.png)
 
@@ -197,10 +201,11 @@ does: ticked hides the window and keeps dictation working; unticked quits the ap
 See what Wisperno Pro is using right now - graphics memory, RAM, the active speech and language
 engines, and how long the last dictation took - and how much space it takes on your drive.
 
+Each ring shows the **whole PC's** use in grey with **Wisperno Pro's own share in orange**, so you can see at a glance how much of (say) 65% of your RAM is actually this app. The graphics-memory figure matches Windows Task Manager's "Dedicated GPU memory".
+
 ![System Usage](docs/images/system-usage.png)
 
-The **Disk space** card splits the total into application files, AI models, the history database
-and saved recordings, and shows how much is still free on the drive. The AI models are the bulk of it.
+The **Disk space** card splits the total into application files, AI models, history and saved recordings, and shows how much is still free on the drive. Application files and AI models are the app itself and are marked *Can't delete* (uninstall Wisperno Pro from Windows Settings to remove them). History and saved recordings each have a **Delete...** button, with a confirmation.
 
 ## Default hotkeys
 
@@ -221,7 +226,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.1.0` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.3.0` file from the
 release into **one folder** - the `.exe` and all the numbered `.bin` parts (the installer
 uses disk spanning, so it reads the parts from beside itself) - then run the `.exe`. It upgrades
 an existing Wisperno Pro in place, keeping your settings, history and dictionary. The first
@@ -354,7 +359,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.1.0. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.3.0. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

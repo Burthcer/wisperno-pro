@@ -61,7 +61,7 @@ def test_post_roll_keeps_recording_then_stops() -> None:
     order = mock.Mock()
     engine.audio_worker.stop_recording.side_effect = lambda: (order.stop(), None)[1]  # records the call, returns "no audio"
     with mock.patch("src.engine.audio_cues") as cues:
-        cues.play_stop_cue.side_effect = lambda: order.beep()
+        cues.play_stop_cue.side_effect = lambda *args: order.beep()
         t0 = time.perf_counter()
         engine._on_ptt_release()
         returned_after_ms = (time.perf_counter() - t0) * 1000

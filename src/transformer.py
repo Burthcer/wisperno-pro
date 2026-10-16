@@ -211,6 +211,29 @@ def _has_repetition_loop(text: str, threshold: int = REPETITION_LOOP_THRESHOLD) 
 FIDELITY_STRICT_MODES = frozenset({"polish", "code"})
 
 
+# Phrases whose words look like filler to a cleanup model but carry the sentence ("just letting you know,
+# the build is ready" must not lose "you know"). If the raw dictation has one and the output doesn't, the
+# model damaged the sentence.
+_PROTECTED_IDIOMS = re.compile(
+    r"\b(?:let(?:ting|s)?|let's) (?:you|me|us|him|her|them|everyone) know\b"
+    r"|\b(?:as|did|if|do) you know\b|\byou know what\b",
+    re.IGNORECASE,
+)
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s']", " ", text.lower()).split())
+
+
+def _lost_idiom(raw: str, output: str) -> Optional[str]:
+    plain_out = _plain(output)
+    for match in _PROTECTED_IDIOMS.finditer(raw):
+        phrase = _plain(match.group(0))
+        if phrase not in plain_out:
+            return phrase
+    return None
+
+
 def sanity_check(raw: str, output: str, mode: str = "polish", profanity_filter: str = "allow") -> Optional[str]:
     """Programmatic guardrail, independent of prompt-following: returns a
     human-readable reason `output` looks wrong for `raw`, or None if it's
@@ -262,6 +285,10 @@ def sanity_check(raw: str, output: str, mode: str = "polish", profanity_filter: 
     # profanity preference applies regardless of which mode/prompt is active.
     if profanity_filter == "allow" and profanity_was_censored(raw, output):
         return "profanity censored by the model despite 'Allow All' setting"
+
+    lost = _lost_idiom(raw, output)
+    if lost:
+        return f"cleanup dropped part of the phrase '{lost}'"
 
     if mode not in FIDELITY_STRICT_MODES:
         return None  # bullets/prompt_engineer/custom prompts restructure by design - leak check above still applies

@@ -55,7 +55,26 @@ def test_breakdown_adds_up() -> None:
     logger.success("PASS: app / models / history / recordings are measured separately and add up.")
 
 
+def test_delete_recordings_only_touches_recordings() -> None:
+    from src.storage_usage import delete_recordings
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        data = Path(tmp)
+        (data / "recent_audio").mkdir()
+        (data / "recordings").mkdir()
+        (data / "recent_audio" / "1.wav").write_bytes(b"a" * 1000)
+        (data / "recordings" / "x.wav").write_bytes(b"b" * 500)
+        (data / "wisperno.db").write_bytes(b"d" * 300)
+        (data / "config.yaml").write_text("keep me")
+        assert delete_recordings(data) == 1500
+        assert not list((data / "recent_audio").iterdir()) and not list((data / "recordings").iterdir())
+        assert (data / "wisperno.db").exists() and (data / "config.yaml").exists(), "history and settings must survive"
+        assert delete_recordings(data) == 0 and delete_recordings(data / "missing") == 0
+    logger.success("PASS: deleting recordings frees exactly their bytes and never touches history or settings.")
+
+
 def run_all_tests() -> None:
+    test_delete_recordings_only_touches_recordings()
     test_format_bytes()
     test_breakdown_adds_up()
     logger.success("ALL STORAGE USAGE TESTS PASSED")

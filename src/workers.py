@@ -29,6 +29,7 @@ from src.app_context import apply_app_style, foreground_app, style_for_app, want
 from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
+from src.paragraphing import split_into_paragraphs
 from src.self_correction import apply_self_correction
 from src.swear_filter import apply_profanity_filter
 
@@ -154,7 +155,7 @@ class InferenceWorker(QThread):
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
         save_recording: bool = False, trailing_space: bool = False, app_styles: Optional[Dict[str, str]] = None,
-        keep_recent: int = 0, self_correction: bool = False, parent: Optional[QObject] = None,
+        keep_recent: int = 0, self_correction: bool = False, auto_paragraphs: bool = False, parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -187,6 +188,8 @@ class InferenceWorker(QThread):
         self.keep_recent = keep_recent
         # Settings -> "Remove what I retract" (src/self_correction.py).
         self.self_correction = self_correction
+        # Settings -> Writing -> topic paragraphs for long dictation (src/paragraphing.py).
+        self.auto_paragraphs = auto_paragraphs
 
     def run(self) -> None:
         try:
@@ -237,6 +240,12 @@ class InferenceWorker(QThread):
                 if style != "default":
                     final_text = apply_app_style(final_text, style)
                     logger.info(f"[APP STYLE] {app} -> '{style}' formatting.")
+            # A long monologue becomes readable paragraphs - but only for plain Polish dictation into a
+            # normal-sentence app: never a custom transform, snippet, chat app, editor or terminal (a
+            # blank line pasted into a terminal could run a command).
+            if (self.auto_paragraphs and style == "default" and self.mode == "polish"
+                    and not self.system_prompt and normalized not in self.snippets):
+                final_text = split_into_paragraphs(final_text)
             add_space = self.trailing_space and wants_trailing_space(style)
             injected = self.injector.inject_text(with_trailing_space(final_text) if add_space else final_text)
             latency_ms = (time.perf_counter() - t0) * 1000
