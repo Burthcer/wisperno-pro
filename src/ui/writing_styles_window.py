@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui import theme
+from src.ui.scroll_utils import clamp_to_screen
 from src.writing_styles import WRITING_STYLES
 
 GENERATING_PLACEHOLDER = "Generating..."
@@ -236,6 +237,7 @@ class WritingStylesWindow(QWidget):
             geo = screen.availableGeometry()
             self.adjustSize()
             self.move(geo.center().x() - self.width() // 2, geo.center().y() - self.height() // 2)
+            clamp_to_screen(self)
         self.show()
         self.raise_()
         self.activateWindow()

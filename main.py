@@ -145,6 +145,7 @@ class WispernoApp:
             always_on_top=self.engine.config.pill_always_on_top,
             click_action=self.engine.config.pill_click_action,
             position=self.engine.config.pill_position,
+            shape=self.engine.config.pill_shape,
         )
         self.main_window = None
 
@@ -262,6 +263,13 @@ class WispernoApp:
     def set_pill_click_action(self, action: str) -> None:
         self.engine.set_pill_click_action(action)
         self.pill.set_click_action(action)
+
+    def set_pill_shape(self, shape: str) -> None:
+        self.engine.set_pill_shape(shape)
+        self.pill.set_shape(shape)
+
+    def set_pill_position_preset(self, preset: str) -> None:
+        self.pill.apply_position_preset(preset)  # emits position_changed / position_reset_requested -> saved
 
     def reset_pill_position(self) -> None:
         """Put the pill back at the bottom centre of the main screen."""

@@ -102,6 +102,11 @@ def load_fonts() -> None:
         if path.exists():
             QFontDatabase.addApplicationFont(str(path))
 
+# Checkboxes: an unticked box needs an outline you can actually see on the dark
+# cards, and a ticked one needs a tick (an orange fill alone reads as "maybe").
+CHECKBOX_OFF_BORDER = "#8A877E"
+CHECKMARK_ICON = (get_base_dir() / "assets" / "icons" / "check.png").as_posix()
+
 MAIN_WINDOW_QSS = f"""
 QMainWindow, QWidget {{
     background-color: {BG_APP};
@@ -325,11 +330,11 @@ QCheckBox {{
     spacing: 10px;
 }}
 QCheckBox::indicator {{
-    width: 16px;
-    height: 16px;
-    border: 1px solid {BORDER_STRONG};
+    width: 18px;
+    height: 18px;
+    border: 2px solid {CHECKBOX_OFF_BORDER};
     border-radius: 5px;
-    background-color: {BG_CARD};
+    background-color: {BG_APP};
 }}
 QCheckBox::indicator:hover {{
     border-color: {ACCENT_PRIMARY};
@@ -337,6 +342,7 @@ QCheckBox::indicator:hover {{
 QCheckBox::indicator:checked {{
     background-color: {ACCENT_PRIMARY};
     border-color: {ACCENT_PRIMARY};
+    image: url({CHECKMARK_ICON});
 }}
 QSlider::groove:horizontal {{
     height: 4px;

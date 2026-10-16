@@ -29,6 +29,7 @@ from src.app_context import apply_app_style, foreground_app, style_for_app, want
 from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
+from src.self_correction import apply_self_correction
 from src.swear_filter import apply_profanity_filter
 
 
@@ -145,6 +146,7 @@ class InferenceWorker(QThread):
 
     state_changed = Signal(str)          # 'processing' | 'success' | 'idle'
     result_ready = Signal(dict)          # history row payload, for the History tab
+    recording_saved = Signal(int)        # history id whose audio is now kept (History can offer Re-transcribe)
     error = Signal(str)
 
     def __init__(
@@ -152,7 +154,7 @@ class InferenceWorker(QThread):
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
         save_recording: bool = False, trailing_space: bool = False, app_styles: Optional[Dict[str, str]] = None,
-        parent: Optional[QObject] = None,
+        keep_recent: int = 0, self_correction: bool = False, parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -181,6 +183,10 @@ class InferenceWorker(QThread):
         self.trailing_space = trailing_space
         # Per-app styles (src/app_context.py); None = off.
         self.app_styles = app_styles
+        # Newest N dictations keep their audio for History -> Re-transcribe (0 = none).
+        self.keep_recent = keep_recent
+        # Settings -> "Remove what I retract" (src/self_correction.py).
+        self.self_correction = self_correction
 
     def run(self) -> None:
         try:
@@ -197,6 +203,14 @@ class InferenceWorker(QThread):
                 logger.info("No speech detected in audio segment.")
                 self.state_changed.emit("idle")
                 return
+            if self.self_correction:
+                corrected = apply_self_correction(raw_text)
+                if corrected != raw_text:
+                    logger.info(f"[SELF-CORRECTION] '{raw_text}' -> '{corrected}'")
+                    if not corrected.strip():
+                        self.state_changed.emit("idle")
+                        return
+                    raw_text = corrected
 
             # Snippet expansion bypasses formatting entirely when the transcript matches a trigger.
             normalized = raw_text.strip().lower().rstrip(".!? ")
@@ -231,9 +245,10 @@ class InferenceWorker(QThread):
             # the plain dictation hotkey (active mode, no transform) - see
             # database.py's add_history() docstring for what each source means.
             history_source = "transform" if self.status_label else "dictation"
+            history_id = None
             if self.db:
                 try:
-                    self.db.add_history(
+                    history_id = self.db.add_history(
                         timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
                         duration_seconds=self.record_duration_ms / 1000.0,
                         raw_transcript=raw_text,
@@ -267,11 +282,56 @@ class InferenceWorker(QThread):
                     save_recording(self.audio_array, raw_text, final_text)
                 except Exception as e:
                     logger.warning(f"Could not save test recording: {e}")
+            if history_id and self.keep_recent > 0:
+                try:
+                    from src import recent_audio
+                    recent_audio.save(history_id, self.audio_array, self.keep_recent)
+                    self.recording_saved.emit(history_id)
+                except Exception as e:
+                    logger.warning(f"Could not keep the recording for re-transcribe: {e}")
 
         except Exception as e:
             logger.error(f"InferenceWorker pipeline error: {e}", exc_info=True)
             self.error.emit(str(e))
             self.state_changed.emit("idle")
+
+
+class RetranscribeWorker(QThread):
+    """
+    History -> "Re-transcribe": runs a kept recording through Whisper's careful
+    method (Transcriber.transcribe(careful=True)), cleans it the way a normal
+    dictation is cleaned, and overwrites that History row. Nothing is typed into
+    any window - the result goes to the History row and the clipboard. Shares
+    the engine's single-flight guard (both models are one-at-a-time).
+    """
+
+    result_ready = Signal(dict)
+    error = Signal(str)
+
+    def __init__(self, history_id: int, audio_array, transcriber, transformer, db, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self.history_id = history_id
+        self.audio_array = audio_array
+        self.transcriber = transcriber
+        self.transformer = transformer
+        self.db = db
+
+    def run(self) -> None:
+        try:
+            raw_text = self.transcriber.transcribe(self.audio_array, careful=True)
+            if not raw_text.strip():
+                self.error.emit("The careful pass heard no speech in that recording.")
+                return
+            if is_short_and_clean(raw_text):
+                mode = getattr(self.transformer, "profanity_filter", "allow")
+                final_text = apply_profanity_filter(format_direct(raw_text), mode)
+            else:
+                final_text = self.transformer.transform(raw_text, mode="polish")
+            self.db.update_history_text(self.history_id, raw_text, final_text)
+            self.result_ready.emit({"id": self.history_id, "raw_transcript": raw_text, "polished_transcript": final_text})
+        except Exception as e:
+            logger.error(f"RetranscribeWorker error: {e}", exc_info=True)
+            self.error.emit(str(e))
 
 
 class SelectionPolishWorker(QThread):

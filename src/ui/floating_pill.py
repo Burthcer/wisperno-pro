@@ -51,6 +51,21 @@ CLICK_DICTATE = "dictate"
 CLICK_DASHBOARD = "dashboard"
 CLICK_NONE = "none"
 
+SHAPE_PILL = "pill"
+SHAPE_BOX = "box"
+BOX_RADIUS = 4.0             # corner radius of the "box" shape
+
+# Settings -> "Pill position" presets: id -> (label, horizontal edge, vertical edge).
+POSITION_PRESETS = {
+    "bottom_center": ("Bottom center (default)", "center", "bottom"),
+    "bottom_left": ("Bottom left", "left", "bottom"),
+    "bottom_right": ("Bottom right", "right", "bottom"),
+    "top_center": ("Top center", "center", "top"),
+    "top_left": ("Top left", "left", "top"),
+    "top_right": ("Top right", "right", "top"),
+}
+PRESET_MARGIN = 24
+
 PILL_H = 30                  # height while something is happening
 IDLE_W, IDLE_H = 46, 14      # at rest
 HOVER_W, HOVER_H = 64, 26    # under the cursor
@@ -109,6 +124,7 @@ class FloatingPill(QWidget):
         always_on_top: bool = True,
         click_action: str = CLICK_DICTATE,
         position: Optional[Sequence[int]] = None,
+        shape: str = SHAPE_PILL,
     ):
         # WindowDoesNotAcceptFocus (WS_EX_NOACTIVATE): clicking/dragging the pill
         # must never take the keyboard focus from the app being dictated into -
@@ -130,6 +146,7 @@ class FloatingPill(QWidget):
         self.current_mode = initial_mode.upper()
         self.hotkey_label = hotkey_label
         self.click_action = click_action
+        self.shape = shape if shape in (SHAPE_PILL, SHAPE_BOX) else SHAPE_PILL
         self.state = STATE_LOADING
         # "processing:<Label>" names a Transforms run; "recording:<Label>" says
         # what this recording will do (e.g. DIRECT = no LLM) - see set_state.
@@ -210,6 +227,34 @@ class FloatingPill(QWidget):
 
     def has_custom_position(self) -> bool:
         return self._anchor is not None
+
+    def apply_position_preset(self, preset: str) -> None:
+        """Snap to a named corner/edge of the screen the pill is on, and remember it.
+        'bottom_center' is the default spot, so it clears the saved position instead."""
+        if preset not in POSITION_PRESETS:
+            return
+        if preset == "bottom_center":
+            self.reset_position()
+            self.position_reset_requested.emit()
+            return
+        _, horizontal, vertical = POSITION_PRESETS[preset]
+        here = self._anchor if self._anchor is not None else self._default_anchor()
+        geo = self._screen_geometry_at(here)
+        half_w, half_h = ACTIVE_W / 2.0, PILL_H / 2.0
+        x = {"left": geo.left() + PRESET_MARGIN + half_w, "right": geo.right() - PRESET_MARGIN - half_w,
+             "center": geo.center().x()}[horizontal]
+        y = geo.top() + PRESET_MARGIN + half_h if vertical == "top" else geo.bottom() - BOTTOM_OFFSET + PILL_H / 2.0
+        self._anchor = QPointF(float(x), float(y))
+        self._reposition()
+        self.position_changed.emit(int(self._anchor.x()), int(self._anchor.y()))
+
+    def set_shape(self, shape: str) -> None:
+        self.shape = shape if shape in (SHAPE_PILL, SHAPE_BOX) else SHAPE_PILL
+        self.update()
+
+    def _corner_radius(self, h: float) -> float:
+        half = (h - 1) / 2.0
+        return half if self.shape == SHAPE_PILL else min(BOX_RADIUS, half)
 
     def _apply_size_targets(self) -> None:
         state = self.state
@@ -303,7 +348,10 @@ class FloatingPill(QWidget):
         """Live mic level (RMS per audio block) while recording."""
         if self.state != STATE_RECORDING:
             return
-        level = min((rms * 12.0) ** 0.85, 1.0)
+        # Typical speech on a laptop mic is RMS ~0.01-0.05; the old *12 gain left
+        # the bars barely moving. *40 with a softer curve makes ordinary speech
+        # swing the bars across most of their height.
+        level = min((rms * 40.0) ** 0.7, 1.0)
         if level > self._smoothed_level:
             self._smoothed_level = 0.5 * self._smoothed_level + 0.5 * level
         else:
@@ -369,7 +417,8 @@ class FloatingPill(QWidget):
         w, h = self.width(), self.height()
         bg, border = self._colors_for_state()
         path = QPainterPath()
-        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), (h - 1) / 2.0, (h - 1) / 2.0)
+        radius = self._corner_radius(h)
+        path.addRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), radius, radius)
         fill = QColor(bg)
         fill.setAlphaF(theme.PILL_BG_ALPHA)
         painter.fillPath(path, fill)
@@ -466,7 +515,7 @@ class FloatingPill(QWidget):
         n = len(self._levels)
         step = rect.width() / n
         bar_w = max(1.5, step * 0.55)
-        max_h = rect.height() - 12.0
+        max_h = rect.height() - 6.0   # nearly the full capsule height at a loud peak
         cy = rect.height() / 2.0
         painter.setPen(Qt.PenStyle.NoPen)
         for i, level in enumerate(self._levels):
@@ -595,6 +644,9 @@ class FloatingPill(QWidget):
         menu = QMenu(self)
         menu.addAction("Open Dashboard", self.dashboard_requested.emit)
         menu.addAction("Cycle Mode", self.cycle_mode_requested.emit)
+        move_menu = menu.addMenu("Move Pill To")
+        for key, (label, _h, _v) in POSITION_PRESETS.items():
+            move_menu.addAction(label.replace(" (default)", ""), lambda k=key: self.apply_position_preset(k))
         if self.has_custom_position():
             menu.addAction("Reset Pill Position", self.position_reset_requested.emit)
         menu.addSeparator()

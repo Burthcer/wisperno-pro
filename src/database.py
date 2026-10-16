@@ -407,6 +407,14 @@ class WispernoDB:
             )
             return [dict(row) for row in cur.fetchall()]
 
+    def update_history_text(self, history_id: int, raw_transcript: str, polished_transcript: str) -> None:
+        """Overwrite one row's transcripts (History's Re-transcribe)."""
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE history SET raw_transcript = ?, polished_transcript = ?, word_count = ? WHERE id = ?",
+                (raw_transcript, polished_transcript, len(polished_transcript.split()), history_id),
+            )
+
     def toggle_favorite(self, history_id: int) -> None:
         with self._cursor() as cur:
             cur.execute("UPDATE history SET is_favorite = 1 - is_favorite WHERE id = ?", (history_id,))

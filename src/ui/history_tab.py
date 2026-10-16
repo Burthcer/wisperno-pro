@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QFrame, QMessageBox, QSizePolicy, QLayout,
 )
 
+from src import recent_audio
 from src.ui import theme
 from src.branding import APP_NAME
 
@@ -128,6 +129,8 @@ class HistoryTab(QWidget):
         self.engine = engine
         self._filter_mode = "all"
         self._filter_buttons = {}
+        engine.retranscribed.connect(self._on_retranscribed)
+        engine.retranscribe_failed.connect(self._on_retranscribe_failed)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 22, 28, 22)
         layout.addWidget(_label_title("History"))
@@ -143,7 +146,7 @@ class HistoryTab(QWidget):
         layout.addWidget(metrics_frame)
 
         search_row = QHBoxLayout()
-        self.search_box = QLineEdit(placeholderText="⌕  Search transcripts...")
+        self.search_box = QLineEdit(placeholderText="Search transcripts...")
         self.search_box.textChanged.connect(lambda _t: self.refresh())
         search_row.addWidget(self.search_box, 1)
         search_row.addStretch()
@@ -263,7 +266,10 @@ class HistoryTab(QWidget):
         Qt's layout engine a hard constraint it cannot renegotiate away
         during the card's re-layout when the raw-transcript disclosure below
         toggles visibility."""
-        header_widget = QWidget()
+        header_widget = QWidget(objectName="historyHeader")
+        # The app-wide QWidget rule paints every bare container BG_APP; without this the
+        # header strip shows up as a darker band across each (lighter) history row.
+        header_widget.setStyleSheet("#historyHeader { background: transparent; }")
         header_widget.setFixedHeight(HEADER_HEIGHT)
         header_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         header = QHBoxLayout(header_widget)
@@ -354,7 +360,13 @@ class HistoryTab(QWidget):
         dict_btn.clicked.connect(lambda: self._add_to_dictionary(row["raw_transcript"]))
         del_btn = _link_btn("Delete", color=theme.DANGER)
         del_btn.clicked.connect(lambda: self._delete(row["id"]))
-        for b in (copy_btn, pin_btn, fav_btn, dict_btn, del_btn):
+        buttons = [copy_btn, pin_btn, fav_btn, dict_btn, del_btn]
+        if row.get("entry_type") != "live_transcript" and recent_audio.has_audio(row["id"]):
+            redo_btn = _link_btn("Re-transcribe")
+            redo_btn.setToolTip("Run the saved audio again with a slower, more careful method. Replaces this entry's text.")
+            redo_btn.clicked.connect(lambda: self._retranscribe(row["id"], redo_btn))
+            buttons.insert(1, redo_btn)
+        for b in buttons:
             actions.addWidget(b)
         actions.addStretch()
         v.addLayout(actions)
@@ -369,6 +381,25 @@ class HistoryTab(QWidget):
         original = button.text()
         button.setText("Copied!")
         QTimer.singleShot(1200, lambda: button.setText(original))
+
+    def _retranscribe(self, history_id: int, button: QPushButton) -> None:
+        if self.engine.retranscribe_history(history_id):
+            button.setText("Re-transcribing...")
+            button.setEnabled(False)
+        else:
+            QMessageBox.information(
+                self, APP_NAME, "Can't re-transcribe right now - wait for the current dictation to finish, "
+                "or the saved audio for this entry is gone.")
+
+    def _on_retranscribed(self, row: dict) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().setText(row.get("polished_transcript", ""))  # ready to paste where it belongs
+        self.refresh()
+
+    def _on_retranscribe_failed(self, message: str) -> None:
+        QMessageBox.warning(self, APP_NAME, f"Re-transcribe failed: {message}")
+        self.refresh()
 
     def _toggle_favorite(self, history_id: int) -> None:
         self.engine.db.toggle_favorite(history_id)

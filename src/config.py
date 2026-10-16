@@ -207,6 +207,10 @@ class AppConfig(BaseModel):
         description="What a click on the idle pill does: 'dictate' (start a dictation; the pill's check/x then "
                     "finish/cancel it), 'dashboard' (open the dashboard) or 'none' (the pill only displays).",
     )
+    pill_shape: str = Field(
+        default="pill",
+        description="Look of the floating pill: 'pill' (fully rounded capsule) or 'box' (rounded rectangle).",
+    )
     pill_position: Optional[List[int]] = Field(
         default=None,
         description="Remembered [x, y] centre of the pill after you drag it; unset = bottom centre of the main screen.",
@@ -220,6 +224,16 @@ class AppConfig(BaseModel):
     app_styles: Dict[str, str] = Field(
         default_factory=lambda: dict(DEFAULT_APP_STYLES),
         description="App executable name (lowercase, e.g. 'slack.exe') -> 'default' | 'messaging' | 'code'.",
+    )
+    keep_recent_recordings: int = Field(
+        default=3, ge=0, le=10,
+        description="How many of the latest dictations keep their audio on this PC (oldest deleted automatically) "
+                    "so History can re-transcribe a bad one with the careful method. 0 = keep none.",
+    )
+    self_correction: bool = Field(
+        default=False,
+        description="When a sentence starts with a retraction ('scratch that', 'no wait', 'no, no, ...'), "
+                    "drop the sentence before it and keep what follows. Off by default: it deletes words.",
     )
     save_recordings_for_testing: bool = Field(
         default=False,

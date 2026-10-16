@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
 
 from src.ui import theme
+from src.ui.scroll_utils import clamp_to_screen
 
 QSS = f"""
 QWidget#liveRoot {{
@@ -144,8 +145,9 @@ class LiveTranscriptionWindow(QWidget):
         self._clock_timer.start(1000)
         screen = self.screen()
         if screen is not None:
-            geo = screen.geometry()
+            geo = screen.availableGeometry()
             self.move(geo.right() - self.width() - 24, geo.bottom() - self.height() - 100)
+            clamp_to_screen(self)
         self.show()
         self.raise_()
 

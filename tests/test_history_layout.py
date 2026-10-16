@@ -41,7 +41,13 @@ def _make_history_tab(db):
         def add_entry(self, *args, **kwargs):
             pass
 
+    class _NoSignal:
+        def connect(self, _slot):
+            pass
+
     class _FakeEngine:
+        retranscribed = retranscribe_failed = _NoSignal()
+
         def __init__(self, db):
             self.db = db
             self.vocabulary = _FakeVocabulary()

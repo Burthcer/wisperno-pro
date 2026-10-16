@@ -23,6 +23,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 from faster_whisper import WhisperModel
 
 from src.config import WhisperConfig, get_base_dir
+from src.swear_filter import unmask_profanity
 from src.vocabulary import Vocabulary
 
 # Above this many seconds of buffered audio, split into VAD-aligned chunks
@@ -158,7 +159,7 @@ class Transcriber:
                 return model
             raise
 
-    def transcribe(self, audio_array: np.ndarray) -> str:
+    def transcribe(self, audio_array: np.ndarray, careful: bool = False) -> str:
         """
         Transcribe in-memory float32 16kHz mono audio array to text.
 
@@ -167,6 +168,11 @@ class Transcriber:
 
         Returns:
             Cleaned transcription string.
+
+        careful=True is the History "Re-transcribe" method: slower, and it drops the
+        gates that can cut words out of a clip the normal pass got wrong (no VAD
+        trimming, no confidence/no-speech rejection), tries a wider beam, and lets the
+        decoder retry at higher temperature instead of giving up on a segment.
         """
         if audio_array is None or len(audio_array) == 0:
             return ""
@@ -176,7 +182,7 @@ class Transcriber:
         # Long recordings append the previous chunk's last words to the prompt - leave room for them.
         biased_prompt, hotwords = self._whisper_bias(reserve_tokens=CHUNK_CONTEXT_TOKENS if len(chunks) > 1 else 0)
         if len(chunks) <= 1:
-            full_text = self._transcribe_one_pass(audio_array, biased_prompt, hotwords)
+            full_text = self._transcribe_one_pass(audio_array, biased_prompt, hotwords, careful)
         else:
             logger.info(
                 f"Long recording ({len(audio_array)/16000:.1f}s) - splitting into {len(chunks)} "
@@ -192,7 +198,7 @@ class Transcriber:
                 # prompt continuity to bridge the cut.
                 context_words = " ".join(pieces[-1].split()[-CHUNK_CONTEXT_WORDS:]) if pieces else ""
                 chunk_prompt = f"{biased_prompt} {context_words}".strip() if context_words else biased_prompt
-                chunk_text = self._transcribe_one_pass(audio_array[start:end], chunk_prompt, hotwords)
+                chunk_text = self._transcribe_one_pass(audio_array[start:end], chunk_prompt, hotwords, careful)
                 if chunk_text:
                     pieces.append(chunk_text)
             full_text = " ".join(pieces).strip()
@@ -214,7 +220,9 @@ class Transcriber:
                 pass
         return max(1, len(text) // 3)  # conservative: names/jargon tokenize at ~3 chars a token
 
-    def _transcribe_one_pass(self, audio_array: np.ndarray, biased_prompt: str, hotwords: Optional[str] = None) -> str:
+    def _transcribe_one_pass(
+        self, audio_array: np.ndarray, biased_prompt: str, hotwords: Optional[str] = None, careful: bool = False,
+    ) -> str:
         """One chunk (already known to fit comfortably inside Whisper's native window) through
         the model, with the existing no-VAD retry safety net for a quiet/short/oddly-mic'd chunk
         VAD misjudges as silent."""
@@ -224,6 +232,12 @@ class Transcriber:
             "min_silence_duration_ms": self.config.vad_min_silence_duration_ms,
             "speech_pad_ms": self.config.vad_speech_pad_ms,
         } if self.config.vad_filter else None
+
+        if careful:
+            text, info = self._run_transcription(
+                audio_array, "", vad_filter=False, vad_params=None, hotwords=hotwords, careful=True,
+            )
+            return unmask_profanity(self.vocabulary.correct_sound_alikes(self.vocabulary.apply_replacements(text.strip())))
 
         text, info = self._run_transcription(
             audio_array, biased_prompt, vad_filter=self.config.vad_filter, vad_params=vad_params, hotwords=hotwords,
@@ -238,7 +252,8 @@ class Transcriber:
         if no_speech and text and is_no_speech_hallucination(text, biased_prompt):
             logger.info(f"Dropped likely Whisper hallucination on near-silent audio: {text!r}")
             return ""
-        return self.vocabulary.correct_sound_alikes(self.vocabulary.apply_replacements(text.strip()))
+        # Whisper often masks swear words itself ("f**king"); put back what was said.
+        return unmask_profanity(self.vocabulary.correct_sound_alikes(self.vocabulary.apply_replacements(text.strip())))
 
     def transcribe_live_window(self, audio_array: np.ndarray, context: Optional[str] = None) -> List[dict]:
         """
@@ -335,7 +350,7 @@ class Transcriber:
 
     def _run_transcription(
         self, audio_array: np.ndarray, biased_prompt: str, vad_filter: bool, vad_params: Optional[dict],
-        condition_on_previous_text: bool = False, hotwords: Optional[str] = None,
+        condition_on_previous_text: bool = False, hotwords: Optional[str] = None, careful: bool = False,
     ):
         """One Whisper pass; consumes the full segment generator, never just the first segment.
         The three threshold kwargs below are faster-whisper's OWN default values
@@ -345,9 +360,9 @@ class Transcriber:
         hallucination gates without someone noticing the diff here."""
         segments, info = self.model.transcribe(
             audio_array,
-            beam_size=self.config.beam_size,
+            beam_size=max(self.config.beam_size, 8) if careful else self.config.beam_size,
             best_of=1,
-            temperature=0.0,
+            temperature=(0.0, 0.2, 0.4) if careful else 0.0,
             # word_timestamps=True (not the segment-level timestamps a plain
             # transcribe() call gives you) is required for the paragraph-pause
             # join below: verified empirically that faster-whisper's SEGMENT
@@ -363,9 +378,12 @@ class Transcriber:
             hotwords=hotwords,
             language=self.config.language,  # pinned to 'en' by default; null = auto-detect
             condition_on_previous_text=condition_on_previous_text,
-            compression_ratio_threshold=2.4,  # reject a segment that's too repetitive to be real speech
-            log_prob_threshold=-1.0,          # reject a low-confidence (likely hallucinated) decode
-            no_speech_threshold=0.6,          # reject a segment Whisper itself thinks is silence
+            # The normal gates below reject segments that look repetitive / low-confidence /
+            # silent; the careful re-transcribe turns them off, since a clip the user is
+            # re-running is one where the normal pass already lost words.
+            compression_ratio_threshold=None if careful else 2.4,  # reject a segment that's too repetitive to be real speech
+            log_prob_threshold=None if careful else -1.0,          # reject a low-confidence (likely hallucinated) decode
+            no_speech_threshold=None if careful else 0.6,          # reject a segment Whisper itself thinks is silence
         )
         # Join words with "\n\n" across a real mid-dictation pause (>=
         # PARAGRAPH_PAUSE_SEC) instead of the word's own natural leading

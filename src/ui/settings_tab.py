@@ -20,6 +20,7 @@ from src.app_context import STYLE_LABELS, STYLES
 from src.presets import BENCHMARK_MATRIX, DEFAULT_PRESET, MODEL_PRESETS
 from src.ui import theme
 from src.ui.scroll_utils import make_scrollable_layout
+from src.ui.floating_pill import POSITION_PRESETS
 from src.ui.shortcut_recorder import KeySequenceRecorder
 from src.branding import APP_NAME
 
@@ -350,16 +351,42 @@ class _GeneralSettings(QWidget):
         self.pill_click_cb.setCurrentIndex(click_idx if click_idx >= 0 else 0)
         self.pill_click_cb.currentIndexChanged.connect(self._on_pill_click_action_changed)
         click_row.addWidget(self.pill_click_cb, 1)
-        self.reset_pill_btn = QPushButton("Reset Position")
-        self.reset_pill_btn.clicked.connect(self._on_reset_pill_position)
-        click_row.addWidget(self.reset_pill_btn)
         click_v.addLayout(click_row)
         layout.addWidget(click_card)
 
-        self.minimize_to_tray_cb = QCheckBox("Minimize to Tray on Close (uncheck to quit fully)")
+        look_card, look_v = _shortcut_card(
+            "Pill Shape & Position",
+            "Pick the pill's shape and snap it to a corner or edge of the screen. You can still drag it "
+            "anywhere; Reset Position puts it back at the bottom centre.",
+        )
+        look_row = QHBoxLayout()
+        self.pill_shape_cb = _no_wheel(QComboBox())
+        self.pill_shape_cb.addItem("Shape: Pill (rounded)", "pill")
+        self.pill_shape_cb.addItem("Shape: Box (rounded rectangle)", "box")
+        shape_idx = self.pill_shape_cb.findData(engine.config.pill_shape)
+        self.pill_shape_cb.setCurrentIndex(shape_idx if shape_idx >= 0 else 0)
+        self.pill_shape_cb.currentIndexChanged.connect(self._on_pill_shape_changed)
+        look_row.addWidget(self.pill_shape_cb, 1)
+        self.pill_preset_cb = _no_wheel(QComboBox())
+        self.pill_preset_cb.addItem("Move to...", None)
+        for key, (label, _h, _v) in POSITION_PRESETS.items():
+            self.pill_preset_cb.addItem(label, key)
+        self.pill_preset_cb.activated.connect(self._on_pill_preset_chosen)
+        look_row.addWidget(self.pill_preset_cb, 1)
+        self.reset_pill_btn = QPushButton("Reset Position")
+        self.reset_pill_btn.clicked.connect(self._on_reset_pill_position)
+        look_row.addWidget(self.reset_pill_btn)
+        look_v.addLayout(look_row)
+        layout.addWidget(look_card)
+
+        self.minimize_to_tray_cb = QCheckBox("Keep running in the tray when I close the window")
         self.minimize_to_tray_cb.setChecked(engine.config.minimize_to_tray)
         self.minimize_to_tray_cb.stateChanged.connect(lambda s: engine.set_minimize_to_tray(s != 0))
         layout.addWidget(self.minimize_to_tray_cb)
+        layout.addWidget(_desc_label(
+            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">Ticked: closing the window hides it and '
+            f'dictation keeps working. Unticked: closing the window quits {APP_NAME} completely.</span>'
+        ))
 
         self.always_on_top_cb = QCheckBox("Always Keep Pill on Top (including fullscreen apps/games)")
         self.always_on_top_cb.setChecked(engine.config.pill_always_on_top)
@@ -422,6 +449,34 @@ class _GeneralSettings(QWidget):
         self._refresh_app_styles()
 
         # --- Testing ---
+        layout.addWidget(_label_title("Recovery & Corrections"))
+        keep_row = QHBoxLayout()
+        keep_row.addWidget(QLabel("Keep the audio of my last"))
+        self.keep_recent_cb = _no_wheel(QComboBox())
+        for count, label in ((0, "0 (off)"), (3, "3"), (5, "5"), (10, "10")):
+            self.keep_recent_cb.addItem(label, count)
+        keep_idx = self.keep_recent_cb.findData(engine.config.keep_recent_recordings)
+        self.keep_recent_cb.setCurrentIndex(keep_idx if keep_idx >= 0 else 1)
+        self.keep_recent_cb.currentIndexChanged.connect(lambda _i: engine.set_keep_recent_recordings(self.keep_recent_cb.currentData()))
+        keep_row.addWidget(self.keep_recent_cb)
+        keep_row.addWidget(QLabel("dictations"))
+        keep_row.addStretch()
+        layout.addLayout(keep_row)
+        layout.addWidget(_desc_label(
+            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">If a dictation came out wrong, open History and '
+            f'press Re-transcribe to run its saved audio again with a slower, more careful method. Older clips are '
+            f'deleted automatically. The audio stays on this PC.</span>'
+        ))
+        self.self_correction_cb = QCheckBox("Remove what I retract (say \"scratch that\", \"no wait\", or \"no, no, ...\")")
+        self.self_correction_cb.setChecked(engine.config.self_correction)
+        self.self_correction_cb.stateChanged.connect(lambda s: engine.set_self_correction(s != 0))
+        layout.addWidget(self.self_correction_cb)
+        layout.addWidget(_desc_label(
+            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">When a sentence starts with one of those phrases, '
+            f'the sentence before it is dropped and the rest is kept. Only those exact phrases count, so ordinary speech '
+            f'is never cut. The original wording stays in History under Show Raw Transcript.</span>'
+        ))
+
         layout.addWidget(_label_title("Testing"))
         self.save_recordings_cb = QCheckBox("Save Recordings for Testing (stores your dictation audio on this PC)")
         self.save_recordings_cb.setToolTip(
@@ -498,6 +553,19 @@ class _GeneralSettings(QWidget):
             self.controller.set_pill_click_action(action)
         else:
             self.engine.set_pill_click_action(action)
+
+    def _on_pill_shape_changed(self, _index: int) -> None:
+        shape = self.pill_shape_cb.currentData()
+        if hasattr(self.controller, "set_pill_shape"):
+            self.controller.set_pill_shape(shape)
+        else:
+            self.engine.set_pill_shape(shape)
+
+    def _on_pill_preset_chosen(self, index: int) -> None:
+        preset = self.pill_preset_cb.itemData(index)
+        if preset and hasattr(self.controller, "set_pill_position_preset"):
+            self.controller.set_pill_position_preset(preset)
+        self.pill_preset_cb.setCurrentIndex(0)  # back to the "Move to..." prompt - it's an action, not a state
 
     def _on_reset_pill_position(self) -> None:
         if hasattr(self.controller, "reset_pill_position"):

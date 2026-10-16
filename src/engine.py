@@ -24,7 +24,7 @@ from src.config import AppConfig, get_app_data_dir, get_base_dir, get_db_path, l
 from src.database import WispernoDB
 from src.presets import apply_preset, migrate_removed_preset
 from src.vocabulary import Vocabulary
-from src.workers import AudioWorker, HotkeyWorker, InferenceWorker, SelectionPolishWorker, WritingStylesWorker
+from src.workers import AudioWorker, HotkeyWorker, InferenceWorker, RetranscribeWorker, SelectionPolishWorker, WritingStylesWorker
 
 MODES = ["polish", "prompt_engineer", "bullets", "code", "raw"]
 
@@ -44,9 +44,12 @@ def _build_transform_hotkeys(db) -> Dict[str, str]:
 # literal 15s: a normal combined load on this hardware is already 7-12s, and
 # first-run disk-cache misses or a slower GPU eat into that margin fast - 15s
 # would fire falsely on hardware only slightly slower than this dev machine.
-# 45s leaves real headroom while still catching a genuine hang in well under a
-# session, let alone the hours a user waited before reporting this.
-INIT_TIMEOUT_SEC = 45.0
+# 45s was too tight in practice: the first launch right after installing the
+# ~8 GB bundle took ~70s on an RTX 4070 laptop (cold disk cache, antivirus
+# scanning the fresh files) and showed a false "startup is stuck" toast, even
+# though init then finished fine. 180s still catches a genuine hang in well
+# under a session, let alone the hours a user waited before reporting this.
+INIT_TIMEOUT_SEC = 180.0
 
 # A dictation whose mic hasn't delivered any audio this long after the key
 # press is cancelled with a visible "Microphone didn't start" instead of
@@ -61,6 +64,8 @@ class WispernoEngine(QObject):
     level_changed = Signal(float)
     mode_changed = Signal(str)
     history_added = Signal(dict)
+    retranscribed = Signal(dict)         # a History row was re-transcribed (carries id + new text)
+    retranscribe_failed = Signal(str)
     engines_ready = Signal(bool)
     settings_requested = Signal()
     dashboard_toggle_requested = Signal()
@@ -433,7 +438,9 @@ class WispernoEngine(QObject):
             save_recording=self.config.save_recordings_for_testing,
             trailing_space=self.config.injector.trailing_space,
             app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
+            keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
         )
+        worker.recording_saved.connect(lambda _id: self.history_added.emit({}))  # History: show Re-transcribe
         worker.state_changed.connect(self.state_changed)
         worker.result_ready.connect(self.history_added)
         worker.finished.connect(self._on_inference_finished)
@@ -443,6 +450,38 @@ class WispernoEngine(QObject):
     def _on_inference_finished(self) -> None:
         self._processing = False
         self._inference_worker = None
+
+    def retranscribe_history(self, history_id: int) -> bool:
+        """History -> Re-transcribe: run a kept recording through the careful Whisper
+        method and overwrite that row. Returns False if it can't start right now
+        (engines loading, another dictation running, or the audio is gone)."""
+        from src import recent_audio
+
+        if not self._engines_ready or self._processing or self._live_worker is not None:
+            return False
+        audio = recent_audio.load(history_id)
+        if audio is None:
+            return False
+        self._processing = True
+        worker = RetranscribeWorker(history_id, audio, self.transcriber, self.transformer, self.db)
+        worker.result_ready.connect(self.history_added)
+        worker.result_ready.connect(self.retranscribed)
+        worker.error.connect(self.retranscribe_failed)
+        worker.finished.connect(self._on_inference_finished)
+        self._inference_worker = worker
+        worker.start()
+        return True
+
+    def set_keep_recent_recordings(self, count: int) -> None:
+        from src import recent_audio
+
+        self.config.keep_recent_recordings = int(count)
+        self.save_config()
+        recent_audio.prune(int(count))  # lowering the number deletes the extra clips now
+
+    def set_self_correction(self, enabled: bool) -> None:
+        self.config.self_correction = enabled
+        self.save_config()
 
     def _on_auto_silence(self) -> None:
         """Auto-Stop Silence Detection fired (AudioRecorder's own live RMS
@@ -508,6 +547,10 @@ class WispernoEngine(QObject):
         self.config.pill_click_action = action
         self.save_config()
 
+    def set_pill_shape(self, shape: str) -> None:
+        self.config.pill_shape = shape
+        self.save_config()
+
     def set_pill_position(self, x: Optional[int], y: Optional[int]) -> None:
         self.config.pill_position = None if x is None or y is None else [int(x), int(y)]
         self.save_config()
@@ -564,7 +607,9 @@ class WispernoEngine(QObject):
                 save_recording=self.config.save_recordings_for_testing,
                 trailing_space=self.config.injector.trailing_space,
                 app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
+                keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
             )
+            worker.recording_saved.connect(lambda _id: self.history_added.emit({}))
         else:
             logger.info(f"[TRANSFORM] No speech captured for '{transform_id}' - trying selected text instead.")
             worker = SelectionPolishWorker(

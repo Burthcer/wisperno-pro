@@ -42,6 +42,8 @@ def _build_main_window():
 
     class FakeEngine(QObject):
         history_added = Signal(dict)
+        retranscribed = Signal(dict)
+        retranscribe_failed = Signal(str)
 
         def __init__(self):
             super().__init__()

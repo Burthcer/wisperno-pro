@@ -343,7 +343,46 @@ def test_engine_saves_pill_settings() -> None:
     logger.success("PASS: defaults are click-to-dictate / default position; changes are saved.")
 
 
+def test_shape_presets_and_speech_level() -> None:
+    logger.info("--- Testing pill shape, position presets and normal-speech wave height ---")
+    from src.config import AppConfig
+    from src.ui.floating_pill import POSITION_PRESETS, SHAPE_BOX, SHAPE_PILL
+
+    assert AppConfig().pill_shape == "pill"
+    pill = _pill(shape="bogus")
+    assert pill.shape == SHAPE_PILL, "unknown shape falls back to the pill"
+    _settle(pill, "idle")
+    assert pill._corner_radius(30) > 14, "pill is fully rounded"
+    pill.set_shape(SHAPE_BOX)
+    assert pill._corner_radius(30) < 10, "box has small corners"
+    assert not pill.grab().isNull()
+
+    moved, resets = [], []
+    pill.position_changed.connect(lambda x, y: moved.append((x, y)))
+    pill.position_reset_requested.connect(lambda: resets.append(1))
+    spots = {}
+    for key in POSITION_PRESETS:
+        if key == "bottom_center":
+            continue
+        pill.apply_position_preset(key)
+        spots[key] = (pill.x() + pill.width() / 2.0, pill.y() + pill.height() / 2.0)
+    assert len(moved) == len(POSITION_PRESETS) - 1
+    assert spots["top_left"][0] < spots["top_center"][0] < spots["top_right"][0]
+    assert spots["top_left"][1] < spots["bottom_left"][1]
+    pill.apply_position_preset("bottom_center")
+    assert resets and not pill.has_custom_position(), "bottom centre is the default spot, i.e. a reset"
+
+    _settle(pill, "recording")
+    for _ in range(30):
+        pill.set_level(0.02)     # ordinary speech on a laptop mic
+        pill._tick()
+    assert max(pill._levels) > 0.6, max(pill._levels)
+    pill.close()
+    logger.success("PASS: shape switches, presets land in the right corners, speech reaches >60% of the bar height.")
+
+
 def run_all_tests() -> None:
+    test_shape_presets_and_speech_level()
     test_click_action_is_configurable()
     test_drag_moves_the_pill_and_does_not_click()
     test_position_is_remembered_and_resettable()
