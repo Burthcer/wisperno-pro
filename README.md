@@ -25,6 +25,7 @@ text ever leave your PC.
 - [The pill](#the-pill)
 - [Features](#features)
 - [Settings tour](#settings-tour)
+- [System Usage and disk space](#system-usage-and-disk-space)
 - [Default hotkeys](#default-hotkeys)
 - [Install](#install)
 - [Requirements](#requirements) - [Measured performance](#measured-performance) - [Credits](#credits--third-party-models) - [License](#license)
@@ -153,25 +154,53 @@ can silently delete real content. It is **off by default**, and the original wor
 - **History** - every dictation with word, time, WPM and count summaries, search,
   filters (All / Dictations / Live Transcripts / Pinned), pin, favorite, copy, one-click
   *+ Dictionary*, and *Re-transcribe*.
-- **System Usage** - live GPU memory and RAM with Wisperno's own share shown separately.
+- **System Usage** - ring gauges for graphics memory and RAM (with Wisperno's own share), the active engines, and a disk-space breakdown. See [System Usage and disk space](#system-usage-and-disk-space).
 - **Two engine presets** - *Turbo Flagship* (default, Qwen2.5-1.5B, ~110 tokens/s) and *Standard*
   (Llama-3.2-3B, most consistent cleanup). See [BENCHMARKS.md](BENCHMARKS.md).
-- **Optional audio cues**, start with Windows, minimise to tray, always-on-top pill (including
-  over fullscreen apps).
+- **A soft start/stop chime** (optional): a gentle rising two-note chime when it starts listening, falling when it stops.
+- Start with Windows, minimise to tray, always-on-top pill (including over fullscreen apps).
 - **A dark, warm-black theme** with one orange accent, taken from devbhamaria.com, with Inter
   Tight and JetBrains Mono bundled.
 
 ## Settings tour
 
-![Settings, part 1](docs/images/settings-1.png)
+Settings is split into eight clearly named tabs. Everything saves the moment you change it,
+except **AI Engine**, which has an *Apply changes* button because it reloads the models.
 
-![Settings, part 2](docs/images/settings-2.png)
+| Tab | What is in it |
+|---|---|
+| **Microphone** | Input device, a 3-second mic test with a live level meter, auto-stop after a pause, and the optional start/stop chime |
+| **Shortcuts** | Tap-to-toggle and hold-to-talk keys (click a box, press the keys you want) |
+| **Writing** | Smart cleanup, copy to clipboard, trailing space, the profanity filter, and "scratch that" retractions |
+| **Pill** | Show/hide, always on top, what a click does, shape (Pill or Box), position presets and Reset |
+| **App Styles** | Per-app punctuation rules (chat apps, code editors...), with your own apps added |
+| **AI Engine** | Engine preset (Turbo Flagship / Standard), Whisper model, pause sensitivity, GPU layers |
+| **Privacy** | How many recent recordings to keep, history auto-delete, storage used, testing recordings |
+| **Startup** | Start with Windows, and whether closing the window keeps it running in the tray |
 
-![Settings, part 3: recovery and corrections](docs/images/settings-3.png)
+![Microphone](docs/images/settings-microphone.png)
+
+![Writing](docs/images/settings-writing.png)
+
+![Pill](docs/images/settings-pill.png)
+
+![AI Engine](docs/images/settings-ai-engine.png)
+
+![Privacy](docs/images/settings-privacy.png)
 
 Checkboxes show an orange box with a tick when **on** and an empty grey outline when **off**.
 *Keep running in the tray when I close the window* controls what the window's close button
 does: ticked hides the window and keeps dictation working; unticked quits the app completely.
+
+## System Usage and disk space
+
+See what Wisperno Pro is using right now - graphics memory, RAM, the active speech and language
+engines, and how long the last dictation took - and how much space it takes on your drive.
+
+![System Usage](docs/images/system-usage.png)
+
+The **Disk space** card splits the total into application files, AI models, the history database
+and saved recordings, and shows how much is still free on the drive. The AI models are the bulk of it.
 
 ## Default hotkeys
 
@@ -192,7 +221,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.0.0` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.1.0` file from the
 release into **one folder** - the `.exe` and all the numbered `.bin` parts (the installer
 uses disk spanning, so it reads the parts from beside itself) - then run the `.exe`. It upgrades
 an existing Wisperno Pro in place, keeping your settings, history and dictionary. The first
@@ -325,7 +354,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.0.0. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.1.0. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

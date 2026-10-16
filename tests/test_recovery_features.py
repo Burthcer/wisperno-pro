@@ -151,7 +151,29 @@ def test_careful_transcription_loosens_the_gates() -> None:
     logger.success("PASS: careful mode drops the rejection gates, widens the beam, allows temperature retries.")
 
 
+def test_chime_is_valid_soft_and_click_free() -> None:
+    logger.info("--- Testing the start/stop chime ---")
+    import io
+    import struct
+    import wave
+
+    from src import audio_cues
+
+    for name, wav_bytes, ceiling in (("start", audio_cues._start_wav(), 0.40), ("stop", audio_cues._stop_wav(), 0.32)):
+        with wave.open(io.BytesIO(wav_bytes)) as wav:
+            assert wav.getnchannels() == 1 and wav.getsampwidth() == 2 and wav.getframerate() == audio_cues.SAMPLE_RATE
+            n = wav.getnframes()
+            samples = struct.unpack("<%dh" % n, wav.readframes(n))
+        peak = max(abs(x) for x in samples) / 32767
+        assert 0.15 < peak <= ceiling, f"{name} chime peak {peak:.2f} should be audible but gentle"
+        assert abs(samples[0]) < 50 and abs(samples[-1]) < 50, f"{name} chime must start and end at silence (no click)"
+        assert 200 <= 1000 * n / audio_cues.SAMPLE_RATE <= 450, "short enough never to feel like lag"
+    assert audio_cues._stop_wav() != audio_cues._start_wav(), "start and stop must sound different"
+    logger.success("PASS: both chimes are valid mono WAVs, gentle, click-free and distinct.")
+
+
 def run_all_tests() -> None:
+    test_chime_is_valid_soft_and_click_free()
     test_profanity_filter_misses_and_false_hits()
     test_self_correction()
     test_recent_audio_keeps_only_the_newest()

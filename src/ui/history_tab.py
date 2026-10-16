@@ -71,7 +71,10 @@ def _badge(text: str) -> QLabel:
     label = QLabel(text)
     label.setFixedHeight(BADGE_HEIGHT)
     label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-    label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-family: {theme.FONT_FAMILY_MONO}; font-size: 8pt;")
+    label.setStyleSheet(
+        f"color: {theme.TEXT_SECONDARY}; font-family: {theme.FONT_FAMILY_MONO}; font-size: 8pt; "
+        f"background-color: {theme.BG_CARD_HOVER}; border-radius: 9px; padding: 0 9px;"
+    )
     return label
 
 
@@ -93,7 +96,10 @@ def _source_badge(text: str, color: str) -> QLabel:
     label = QLabel(text.upper())
     label.setFixedHeight(BADGE_HEIGHT)
     label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-    label.setStyleSheet(f"color: {color}; font-weight: 700; font-size: 8pt; letter-spacing: 0.5px;")
+    label.setStyleSheet(
+        f"color: {color}; font-weight: 700; font-size: 8pt; letter-spacing: 0.5px; "
+        f"background-color: {theme.wash(color)}; border-radius: 9px; padding: 0 10px;"
+    )
     return label
 
 
@@ -163,6 +169,7 @@ class HistoryTab(QWidget):
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.list_container = QWidget()
         self.list_layout = QVBoxLayout(self.list_container)
         # Prevent the accordion's expand/collapse from ever flexing anything
@@ -172,9 +179,15 @@ class HistoryTab(QWidget):
         # around - the card list grows/shrinks by exactly one card's worth of
         # height when a disclosure opens, nothing more.
         self.list_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        self.list_layout.setSpacing(12)
+        self.list_layout.setContentsMargins(0, 4, 8, 4)
         self.list_layout.addStretch()
         self.scroll.setWidget(self.list_container)
         layout.addWidget(self.scroll)
+        self.empty_state = self._build_empty_state()
+        self.empty_state.setVisible(False)
+        layout.addWidget(self.empty_state)
+        layout.addStretch(0)
 
         self.refresh()
 
@@ -241,6 +254,37 @@ class HistoryTab(QWidget):
         )
         for row in rows:
             self.list_layout.insertWidget(self.list_layout.count() - 1, self._history_card(row))
+        self._update_empty_state(not rows)
+
+    def _build_empty_state(self) -> QWidget:
+        """Shown instead of the (empty) card list - kept outside the list's own layout so the
+        list only ever contains real history cards."""
+        box = QWidget(objectName="historyEmpty")
+        box.setStyleSheet(
+            f"#historyEmpty {{ background-color: {theme.BG_CARD}; border: 1px dashed {theme.BORDER_STRONG}; border-radius: 14px; }}"
+        )
+        v = QVBoxLayout(box)
+        v.setContentsMargins(24, 36, 24, 36)
+        v.setSpacing(6)
+        self._empty_head = QLabel("")
+        self._empty_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_head.setStyleSheet(f"font-size: 13pt; font-weight: 600; color: {theme.TEXT_PRIMARY}; background: transparent;")
+        self._empty_sub = QLabel("")
+        self._empty_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_sub.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; background: transparent;")
+        v.addWidget(self._empty_head)
+        v.addWidget(self._empty_sub)
+        return box
+
+    def _update_empty_state(self, empty: bool) -> None:
+        searching = bool(self.search_box.text().strip()) or self._filter_mode != "all"
+        self._empty_head.setText("Nothing matches that" if searching else "Your dictations will show up here")
+        self._empty_sub.setText(
+            "Try a different search or filter." if searching
+            else "Press your dictation shortcut, or click the floating pill, and start talking."
+        )
+        self.empty_state.setVisible(empty)
+        self.scroll.setVisible(not empty)
 
     def _source_badge_for_row(self, row: dict) -> QLabel:
         if row.get("entry_type") == "live_transcript":
@@ -316,10 +360,13 @@ class HistoryTab(QWidget):
         # than a card grid. Still a QWidget (not a bare layout) so its own
         # background/border are real, paintable properties.
         card = QWidget(objectName="historyRow")
-        card.setStyleSheet(f"#historyRow {{ background-color: {theme.BG_CARD}; border-bottom: 1px solid {theme.BORDER_SUBTLE}; }}")
+        card.setStyleSheet(
+            f"#historyRow {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}"
+            f"#historyRow:hover {{ border-color: {theme.BORDER_STRONG}; }}"
+        )
         v = QVBoxLayout(card)
-        v.setContentsMargins(4, 14, 4, 14)
-        v.setSpacing(8)
+        v.setContentsMargins(20, 16, 20, 14)
+        v.setSpacing(10)
         try:
             ts = datetime.datetime.fromisoformat(row["timestamp"]).strftime("%b %d, %I:%M %p")
         except Exception:
@@ -329,10 +376,11 @@ class HistoryTab(QWidget):
 
         polished_label = QLabel(row["polished_transcript"])
         polished_label.setWordWrap(True)
-        polished_label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 10pt; line-height: 1.6;")
+        polished_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        polished_label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 11pt; line-height: 1.6; background: transparent;")
         v.addWidget(polished_label)
 
-        raw_toggle = QPushButton("▶ Show Raw Transcript")
+        raw_toggle = QPushButton("Show Raw Transcript")
         raw_toggle.setFlat(True)
         raw_toggle.setStyleSheet(f"text-align: left; border: none; color: {theme.TEXT_SECONDARY}; padding: 2px 0; background: transparent;")
         raw_label = QLabel(f'<span style="color:{theme.TEXT_SECONDARY}">{row["raw_transcript"]}</span>')
@@ -342,7 +390,7 @@ class HistoryTab(QWidget):
         def _toggle_raw(checked=False, btn=raw_toggle, lbl=raw_label):
             expanded = lbl.isVisible()
             lbl.setVisible(not expanded)
-            btn.setText("▼ Hide Raw Transcript" if not expanded else "▶ Show Raw Transcript")
+            btn.setText("Hide Raw Transcript" if not expanded else "Show Raw Transcript")
 
         raw_toggle.clicked.connect(_toggle_raw)
         v.addWidget(raw_toggle)

@@ -52,6 +52,36 @@ def _save(widget, name: str) -> None:
     print("saved", name)
 
 
+def _demo_usage(engine) -> None:
+    """Typical, made-up numbers so the System Usage image never shows this machine's real stats."""
+    import types
+    from src import storage_usage
+    from src.system_monitor import SystemMonitor
+
+    GB = 1024 ** 3
+    snapshot = {
+        "gpu_total_mb": 8192.0, "gpu_used_mb": 3480.0, "app_vram_mb": 3230.0, "app_shared_mb": 0.0,
+        "app_vram_source": "per-process counter", "gpu_util_pct": 8, "gpu_temp_c": 47,
+        "ram_total_mb": 32768.0, "ram_used_mb": 14100.0, "app_ram_mb": 2300.0, "thread_count": 41, "cpu_util_pct": 6.0,
+    }
+    SystemMonitor.snapshot = lambda self: snapshot
+    storage_usage.storage_breakdown = lambda *a, **k: {
+        "app": int(4.9 * GB), "models": int(3.1 * GB), "history": 240 * 1024, "recordings": 6 * 1024 ** 2, "free": 212 * GB,
+    }
+    engine.transcriber = types.SimpleNamespace(config=types.SimpleNamespace(model_name="large-v3-turbo", compute_type="int8_float16"))
+    engine.transformer = types.SimpleNamespace(
+        llm=object(), active_model_layers=29, active_model_name="Qwen2.5-1.5B-Instruct-Q8_0",
+        config=types.SimpleNamespace(n_gpu_layers=-1),
+    )
+
+
+def _goto(win, tab) -> None:
+    """Click the real sidebar entry, so the highlighted nav item matches the page shown."""
+    from PySide6.QtWidgets import QListWidget
+
+    win.findChild(QListWidget, "sidebarNav").setCurrentRow(win.stack.indexOf(tab))
+
+
 def dashboard_shots() -> None:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
@@ -63,6 +93,7 @@ def dashboard_shots() -> None:
     with mock.patch("src.recent_audio.has_audio", return_value=True):
         app, win, engine = _build_main_window()
         _seed(engine)
+        _demo_usage(engine)
         win.resize(1280, 860)
         win.setStyleSheet(theme.MAIN_WINDOW_QSS)
         app.processEvents()
@@ -71,26 +102,24 @@ def dashboard_shots() -> None:
         for name, tab in tabs.items():
             if hasattr(tab, "refresh"):
                 tab.refresh()
-            win.stack.setCurrentWidget(tab)
+            _goto(win, tab)
             QTest.qWait(1800)  # let the metric count-up animations finish
             _save(win, f"{name}.png")
-        # Settings is long: take it tall, then cut it into screen-sized parts.
-        win.stack.setCurrentWidget(win.settings_tab)
-        win.resize(1280, 3200)
-        QTest.qWait(800)
-        full = win.grab().toImage()
-        bg = full.pixelColor(full.width() - 5, full.height() - 5)
-        last = full.height() - 1
-        while last > 0 and all(full.pixelColor(x, last) == bg for x in range(240, full.width() - 10, 40)):
-            last -= 1
-        full = full.copy(0, 0, full.width(), min(full.height(), last + 40))
-        part_h = 1000
-        for i in range(0, full.height(), part_h):
-            piece = full.copy(0, i, full.width(), min(part_h, full.height() - i))
-            if piece.height() > 150:
-                OUT.mkdir(parents=True, exist_ok=True)
-                piece.save(str(OUT / f"settings-{i // part_h + 1}.png"))
-                print("saved", f"settings-{i // part_h + 1}.png")
+
+        _goto(win, win.system_usage_tab)
+        win.system_usage_tab.refresh()
+        win.system_usage_tab.refresh_storage()
+        QTest.qWait(1500)
+        win.system_usage_tab._timer.stop()
+        _save(win, "system-usage.png")
+
+        # One image per Settings tab.
+        _goto(win, win.settings_tab)
+        sub_tabs = win.settings_tab.sub_tabs
+        for i in range(sub_tabs.count()):
+            sub_tabs.setCurrentIndex(i)
+            QTest.qWait(300)
+            _save(win, "settings-" + sub_tabs.tabText(i).lower().replace(" ", "-") + ".png")
         win.close()
 
 

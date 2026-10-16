@@ -90,9 +90,12 @@ class SnippetsTab(QWidget):
 
     def _snippet_card(self, r: dict) -> QFrame:
         card = QFrame(objectName="snippetCard")
-        card.setStyleSheet(f"#snippetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 10px; }}")
+        card.setStyleSheet(
+            f"#snippetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}"
+            f"#snippetCard:hover {{ border-color: {theme.BORDER_STRONG}; }}"
+        )
         v = QVBoxLayout(card)
-        v.setContentsMargins(14, 12, 14, 12)
+        v.setContentsMargins(18, 14, 18, 14)
 
         header = QHBoxLayout()
         badge = QLabel(f'When I say "{r["trigger_phrase"]}"')
@@ -106,14 +109,18 @@ class SnippetsTab(QWidget):
         active_cb.setChecked(bool(r["is_active"]))
         active_cb.stateChanged.connect(lambda state, sid=r["id"]: self.engine.db.set_snippet_active(sid, state != 0))
         header.addWidget(active_cb)
-        del_btn = QPushButton("\U0001F5D1")
-        del_btn.setToolTip("Delete")
-        del_btn.setStyleSheet(f"background: transparent; border: none; color: {theme.TEXT_SECONDARY};")
+        del_btn = QPushButton("Delete")
+        del_btn.setToolTip("Delete this snippet")
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; color: {theme.DANGER}; padding: 2px 6px; }}"
+            f"QPushButton:hover {{ text-decoration: underline; }}"
+        )
         del_btn.clicked.connect(lambda checked=False, sid=r["id"]: self._delete(sid))
         header.addWidget(del_btn)
         v.addLayout(header)
 
-        preview_toggle = QPushButton("▶ Show expansion")
+        preview_toggle = QPushButton("Show expansion")
         preview_toggle.setFlat(True)
         preview_toggle.setStyleSheet(f"text-align: left; border: none; color: {theme.TEXT_SECONDARY}; padding: 4px 0;")
         preview = QLabel(r["expansion_text"])
@@ -123,7 +130,7 @@ class SnippetsTab(QWidget):
 
         def _toggle(checked=False, btn=preview_toggle, lbl=preview):
             lbl.setVisible(not lbl.isVisible())
-            btn.setText(("▼ Hide expansion" if lbl.isVisible() else "▶ Show expansion"))
+            btn.setText(("Hide expansion" if lbl.isVisible() else "Show expansion"))
 
         preview_toggle.clicked.connect(_toggle)
         v.addWidget(preview_toggle)

@@ -84,6 +84,8 @@ class DictionaryTab(QWidget):
         self.table.setColumnWidth(3, 100)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(44)  # roomy rows
+        self.table.setShowGrid(False)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Expanding + a layout stretch factor of 1 makes the table (not the whole
         # tab) absorb any extra vertical space, so it scrolls internally via its
@@ -139,6 +141,7 @@ class DictionaryTab(QWidget):
             self.table.setCellWidget(i, 2, _badge(e["category"]))
 
             actions = QWidget()
+            actions.setStyleSheet("background: transparent;")  # else the cell shows as a darker block
             actions_row = QHBoxLayout(actions)
             actions_row.setContentsMargins(0, 0, 0, 0)
             edit_btn = _text_link_btn("edit", "Edit", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)

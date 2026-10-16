@@ -1,7 +1,7 @@
 """
-Settings tab for the Wisperno dashboard: General (everyday controls) and
-Advanced (model/hardware tuning) sub-tabs, plus the KeySequenceRecorder
-widget used for hotkey rebinding.
+Settings tab for the Wisperno dashboard, split into topic tabs: Microphone, Shortcuts,
+Writing, Pill, App Styles, AI Engine (model/hardware tuning), Privacy and Startup.
+Rows are grouped into titled cards (see _group / _row / _check_row).
 """
 
 from typing import Optional
@@ -151,7 +151,8 @@ def _desc_label(html: str) -> QLabel:
 
 
 class SettingsTab(QWidget):
-    """General (default view, instant auto-save) + Advanced (explicit Apply) sub-tabs."""
+    """Settings, split into topic tabs. Everything saves instantly except AI Engine,
+    which has its own Apply button because changing it reloads the models."""
 
     def __init__(self, engine, controller, main_window=None):
         super().__init__()
@@ -162,40 +163,129 @@ class SettingsTab(QWidget):
         layout.setContentsMargins(28, 22, 28, 22)
         layout.addWidget(_label_title("Settings"))
         self.sub_tabs = QTabWidget()
+        self.sub_tabs.setUsesScrollButtons(True)
         layout.addWidget(self.sub_tabs)
 
+        # general_tab / advanced_tab keep their names (other code and tests reach the
+        # controls through them) but are no longer tabs themselves: each owns pages.
         self.general_tab = _GeneralSettings(engine, controller)
         self.advanced_tab = _AdvancedSettings(engine)
-        self.sub_tabs.addTab(self.general_tab, "General")
-        self.sub_tabs.addTab(self.advanced_tab, "Advanced")
+        pages = dict(self.general_tab.pages)
+        pages["AI Engine"] = self.advanced_tab
+        order = ["Microphone", "Shortcuts", "Writing", "Pill", "App Styles", "AI Engine", "Privacy", "Startup"]
+        for name in order:
+            self.sub_tabs.addTab(pages[name], name)
+        self._pages = [pages[name] for name in order]
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        # Always land on General when Settings is (re)opened - Advanced's
-        # hardware-tuning controls shouldn't be the first thing a user sees
-        # after, say, just checking Dictionary and coming back.
+        # Always land on the first tab when Settings is (re)opened - the hardware-tuning
+        # controls shouldn't be the first thing a user sees after, say, just checking
+        # Dictionary and coming back.
         self.sub_tabs.setCurrentIndex(0)
         self.reset_scroll()
 
     def reset_scroll(self) -> None:
-        for tab in (self.general_tab, self.advanced_tab):
-            tab._scroll_area.verticalScrollBar().setValue(0)
+        for page in self._pages:
+            page._scroll_area.verticalScrollBar().setValue(0)
+
+
+def _group(title: str, hint: str = ""):
+    """A titled surface card that holds one topic's rows (see _row / _check_row).
+    Scoped by object name - a bare QFrame rule would also box every QLabel inside it."""
+    frame = QFrame(objectName="settingsGroup")
+    frame.setStyleSheet(
+        f"#settingsGroup {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 14px; }}"
+    )
+    v = QVBoxLayout(frame)
+    v.setContentsMargins(22, 18, 22, 20)
+    v.setSpacing(14)
+    head = QVBoxLayout()
+    head.setSpacing(3)
+    heading = QLabel(title)
+    heading.setStyleSheet(f"font-family: {theme.FONT_FAMILY_DISPLAY}; font-size: 12pt; font-weight: 600; color: {theme.TEXT_PRIMARY}; background: transparent;")
+    head.addWidget(heading)
+    if hint:
+        head.addWidget(_hint(hint))
+    v.addLayout(head)
+    return frame, v
+
+
+def _hint(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 8.5pt; background: transparent;")
+    return label
+
+
+def _row(label: str, hint: str, control) -> QWidget:
+    """label + explanation on the left, the control on the right."""
+    row = QWidget()
+    row.setStyleSheet("background: transparent;")
+    h = QHBoxLayout(row)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.setSpacing(18)
+    left = QVBoxLayout()
+    left.setSpacing(2)
+    title = QLabel(label)
+    title.setStyleSheet(f"font-weight: 600; color: {theme.TEXT_PRIMARY}; background: transparent;")
+    left.addWidget(title)
+    if hint:
+        left.addWidget(_hint(hint))
+    h.addLayout(left, 3)
+    if isinstance(control, QWidget):
+        h.addWidget(control, 2)
+    else:
+        h.addLayout(control, 2)
+    return row
+
+
+def _check_row(checkbox: QCheckBox, hint: str = "") -> QWidget:
+    """A checkbox with its explanation underneath, lined up with the label text."""
+    row = QWidget()
+    row.setStyleSheet("background: transparent;")
+    v = QVBoxLayout(row)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(3)
+    v.addWidget(checkbox)
+    if hint:
+        note = _hint(hint)
+        note.setContentsMargins(28, 0, 0, 0)
+        v.addWidget(note)
+    return row
 
 
 class _GeneralSettings(QWidget):
-    """Everyday controls: mic, dual dictation triggers, autostart, pill visibility.
-    Every control here auto-saves instantly on change - there is no Save button
-    on this tab (see SettingsTab; Advanced keeps its own explicit Apply)."""
+    """Everyday controls, grouped into topic pages (Microphone, Shortcuts, Writing, Pill,
+    App Styles, Privacy, Startup). This object only owns the widgets and their handlers;
+    SettingsTab shows each entry of `self.pages` as its own tab. Every control auto-saves
+    instantly on change - there is no Save button here (the AI Engine tab keeps its own Apply)."""
 
     def __init__(self, engine, controller):
         super().__init__()
         self.engine = engine
         self.controller = controller
-        layout = make_scrollable_layout(self)
-        layout.setContentsMargins(28, 22, 28, 22)
+        self.pages = {}  # tab name -> page widget, in tab order
 
-        # --- Audio ---
-        layout.addWidget(_label_title("Audio Input"))
+        def page(name: str, intro: str):
+            widget = QWidget()
+            lay = make_scrollable_layout(widget)
+            lay.setContentsMargins(28, 22, 28, 22)
+            lay.setSpacing(16)
+            lay.addWidget(_hint(intro))
+            self.pages[name] = widget
+            return lay
+
+        mic = page("Microphone", "Which microphone to listen to, when to stop, and the sound that tells you it's listening.")
+        keys = page("Shortcuts", "Start and stop dictation from the keyboard. More hotkeys (transforms, live transcription) are in the Transforms tab and the README.")
+        writing = page("Writing", "How your words are cleaned up and typed.")
+        pill = page("Pill", "The small floating control that shows what Wisperno is doing - and starts and stops dictation when you click it.")
+        apps = page("App Styles", "Different apps want different punctuation: chat apps drop the final period, code editors skip the trailing space.")
+        privacy = page("Privacy", "Everything stays on this PC. Choose what is kept, for how long, and how much space it uses.")
+        startup = page("Startup", "How Wisperno Pro starts and what the window's close button does.")
+
+        # ---------- Microphone ----------
+        g, v = _group("Input device")
         self.device_cb = _no_wheel(QComboBox())
         self._device_indices = [None]
         self.device_cb.addItem("Auto-detect (default device)")
@@ -219,32 +309,51 @@ class _GeneralSettings(QWidget):
         if engine.config.audio.device_index in self._device_indices:
             self.device_cb.setCurrentIndex(self._device_indices.index(engine.config.audio.device_index))
         self.device_cb.currentIndexChanged.connect(self._on_device_changed)
-        layout.addWidget(self.device_cb)
-
+        v.addWidget(self.device_cb)
         self.level_meter = QProgressBar()
         self.level_meter.setRange(0, 100)
         self.level_meter.setTextVisible(False)
         self.level_meter.setFixedHeight(6)
-        layout.addWidget(self.level_meter)
-        self.test_mic_btn = QPushButton("Test Microphone (3s)")
+        v.addWidget(self.level_meter)
+        self.test_mic_btn = QPushButton("Test microphone (3 seconds)")
         self.test_mic_btn.clicked.connect(self._test_mic)
-        layout.addWidget(self.test_mic_btn)
+        v.addWidget(self.test_mic_btn, alignment=Qt.AlignLeft)
+        mic.addWidget(g)
 
-        # --- Dictation triggers: two fully independent cards, each with its own
-        # shortcut recorder and its own enable switch. Both, either, or neither
-        # can be active at once. "Polish Selected Text" has no card here anymore
-        # - it lives in the Transforms hub (any transform's hotkey already
-        # falls back to polishing the current selection when nothing is spoken).
-        layout.addWidget(_label_title("Dictation Triggers"))
-        triggers_row = QHBoxLayout()
-        triggers_row.setSpacing(12)
-
-        tap_card, tap_v = _shortcut_card(
-            "Tap to Toggle Dictation",
-            "Tap once to start listening, tap again to stop. Speech-to-text with smart cleanup: filler "
-            "removal, \"wait no\" corrections and lists (short, clean phrases stay instant).",
+        g, v = _group("Auto-stop")
+        self.auto_silence_cb = _no_wheel(QComboBox())
+        self.auto_silence_cb.addItem("Off - I'll stop it myself", 0)
+        self.auto_silence_cb.addItem("3 seconds", 3)
+        self.auto_silence_cb.addItem("5 seconds (default)", 5)
+        self.auto_silence_cb.addItem("8 seconds", 8)
+        self.auto_silence_cb.addItem("10 seconds", 10)
+        current_idx = self.auto_silence_cb.findData(engine.config.audio.auto_silence_seconds)
+        self.auto_silence_cb.setCurrentIndex(current_idx if current_idx >= 0 else 2)
+        self.auto_silence_cb.currentIndexChanged.connect(
+            lambda _i: engine.set_auto_silence_seconds(self.auto_silence_cb.currentData())
         )
-        self.tap_enable_cb = QCheckBox("Enable Tap to Toggle")
+        v.addWidget(_row("Stop after a pause of", "When you go quiet for this long, recording ends and the text is typed.", self.auto_silence_cb))
+        mic.addWidget(g)
+
+        g, v = _group("Sounds")
+        self.audio_cues_cb = QCheckBox("Play a soft chime when dictation starts and stops")
+        self.audio_cues_cb.setChecked(engine.config.audio_cues_enabled)
+        self.audio_cues_cb.stateChanged.connect(lambda s: engine.set_audio_cues_enabled(s != 0))
+        v.addWidget(_check_row(self.audio_cues_cb, "A short two-note chime: rising when it starts listening, falling when it stops."))
+        mic.addWidget(g)
+        mic.addStretch()
+
+        # ---------- Shortcuts ----------
+        # Two fully independent cards, each with its own recorder and enable switch.
+        # Both, either, or neither can be active at once. "Polish Selected Text" lives
+        # in the Transforms hub (any transform's hotkey falls back to polishing the
+        # current selection when nothing is spoken).
+        triggers_row = QHBoxLayout()
+        triggers_row.setSpacing(16)
+
+        tap_card, tap_v = _group("Tap to toggle")
+        tap_v.addWidget(_hint("Tap once to start listening, tap again to stop."))
+        self.tap_enable_cb = QCheckBox("Enable tap to toggle")
         self.tap_enable_cb.setChecked(engine.config.tap_toggle_enabled)
         self.tap_enable_cb.stateChanged.connect(lambda s: engine.set_tap_toggle_enabled(s != 0))
         tap_v.addWidget(self.tap_enable_cb)
@@ -253,12 +362,9 @@ class _GeneralSettings(QWidget):
         tap_v.addWidget(self.tap_toggle_recorder)
         triggers_row.addWidget(tap_card)
 
-        hold_card, hold_v = _shortcut_card(
-            "Hold to Talk Dictation",
-            "Hold the shortcut down to record, release to stop - classic push-to-talk. Independent "
-            "of Tap to Toggle above; enable either, both (with different keys), or neither.",
-        )
-        self.hold_enable_cb = QCheckBox("Enable Hold to Talk")
+        hold_card, hold_v = _group("Hold to talk")
+        hold_v.addWidget(_hint("Hold the keys down to record, release to stop - classic push-to-talk."))
+        self.hold_enable_cb = QCheckBox("Enable hold to talk")
         self.hold_enable_cb.setChecked(engine.config.hold_to_talk_enabled)
         self.hold_enable_cb.stateChanged.connect(lambda s: engine.set_hold_to_talk_enabled(s != 0))
         hold_v.addWidget(self.hold_enable_cb)
@@ -266,155 +372,113 @@ class _GeneralSettings(QWidget):
         self.hold_to_talk_recorder.sequence_captured.connect(engine.set_hold_to_talk_hotkey)
         hold_v.addWidget(self.hold_to_talk_recorder)
         triggers_row.addWidget(hold_card)
+        keys.addLayout(triggers_row)
+        keys.addWidget(_hint("Use either, both (with different keys), or neither - you can always click the pill instead. "
+                             "Click a shortcut box, then press the keys you want."))
+        keys.addStretch()
 
-        layout.addLayout(triggers_row)
-
-        # --- Auto-Stop Silence Detection ---
-        silence_card, silence_v = _shortcut_card(
-            "Auto-Stop Silence Detection",
-            "Automatically stops recording and pastes text when you pause speaking.",
-        )
-        self.auto_silence_cb = _no_wheel(QComboBox())
-        self.auto_silence_cb.addItem("Disabled (Manual Stop Only)", 0)
-        self.auto_silence_cb.addItem("3 seconds", 3)
-        self.auto_silence_cb.addItem("5 seconds (Default)", 5)
-        self.auto_silence_cb.addItem("8 seconds", 8)
-        self.auto_silence_cb.addItem("10 seconds", 10)
-        current_idx = self.auto_silence_cb.findData(engine.config.audio.auto_silence_seconds)
-        self.auto_silence_cb.setCurrentIndex(current_idx if current_idx >= 0 else 2)
-        self.auto_silence_cb.currentIndexChanged.connect(
-            lambda _i: engine.set_auto_silence_seconds(self.auto_silence_cb.currentData())
-        )
-        silence_v.addWidget(self.auto_silence_cb)
-        layout.addWidget(silence_card)
-
-        self.auto_llm_polish_cb = QCheckBox("Smart Cleanup with the Local AI (removes filler, fixes corrections, formats lists)")
+        # ---------- Writing ----------
+        g, v = _group("Cleanup")
+        self.auto_llm_polish_cb = QCheckBox("Smart cleanup with the local AI")
         self.auto_llm_polish_cb.setChecked(engine.config.auto_llm_polish)
         self.auto_llm_polish_cb.setToolTip(
-            "On (default): dictation is cleaned by your active Engine Preset - filler words, \"wait no\" "
+            "On (default): dictation is cleaned by your active AI engine - filler words, \"wait no\" "
             "corrections, punctuation, lists. Short phrases that are already clean skip it, so they stay instant.\n"
             "Off: the instant rule-based formatter only - no AI delay at all.\n"
             "Always off in CPU Compatibility Mode (no usable GPU), where it would be too slow."
         )
         self.auto_llm_polish_cb.stateChanged.connect(lambda s: engine.set_auto_llm_polish(s != 0))
-        layout.addWidget(self.auto_llm_polish_cb)
+        v.addWidget(_check_row(self.auto_llm_polish_cb, "Removes filler words, fixes \"wait no\" corrections and formats lists. "
+                                                        "Short, clean phrases stay instant. Turn off for rule-based formatting only."))
+        self.auto_copy_cb = QCheckBox("Also copy the text to the clipboard")
+        self.auto_copy_cb.setChecked(engine.config.injector.auto_copy_to_clipboard)
+        self.auto_copy_cb.stateChanged.connect(lambda s: engine.set_auto_copy_to_clipboard(s != 0))
+        v.addWidget(_check_row(self.auto_copy_cb, "Handy if a dictation lands in the wrong window - just paste it again."))
+        self.trailing_space_cb = QCheckBox("Add a space after each dictated sentence")
+        self.trailing_space_cb.setChecked(engine.config.injector.trailing_space)
+        self.trailing_space_cb.stateChanged.connect(lambda s: engine.set_trailing_space(s != 0))
+        v.addWidget(_check_row(self.trailing_space_cb, "So the next dictation doesn't run into the previous one (\"today.Next\")."))
+        writing.addWidget(g)
 
-        # --- Profanity Filter ---
-        profanity_card, profanity_v = _shortcut_card(
-            "Profanity Filter", "Choose how spoken profanity and swear words are handled in polished output."
-        )
-        profanity_row = QHBoxLayout()
+        g, v = _group("Profanity filter")
         self.profanity_cb = _no_wheel(QComboBox())
-        self.profanity_cb.addItem("Allow All (Verbatim)", "allow")
-        self.profanity_cb.addItem("Censor with Asterisks (e.g., f***, s***)", "censor")
-        self.profanity_cb.addItem("Clean / Remove", "remove")
+        self.profanity_cb.addItem("Keep every word as spoken", "allow")
+        self.profanity_cb.addItem("Censor with asterisks (f***)", "censor")
+        self.profanity_cb.addItem("Remove swear words", "remove")
         current_idx = self.profanity_cb.findData(engine.config.profanity_filter)
         self.profanity_cb.setCurrentIndex(current_idx if current_idx >= 0 else 0)
         self.profanity_cb.currentIndexChanged.connect(lambda _i: engine.set_profanity_filter(self.profanity_cb.currentData()))
+        profanity_row = QHBoxLayout()
         profanity_row.addWidget(self.profanity_cb, 1)
         profanity_row.addWidget(_help_button(
             "Profanity Filter",
             "Controls whether spoken swear words are kept exactly as said, or sanitized, in the text "
             "that gets typed. The LLM never makes this call itself - it always transcribes profanity "
             "verbatim, and this setting is applied as a separate step afterward.",
-            "Allow All for personal notes/chat where your own words should show up unedited. Censor or "
-            "Clean/Remove for anything that might be shared, screen-recorded, or read by someone else.",
+            "Keep every word for personal notes/chat where your own words should show up unedited. Censor or "
+            "Remove for anything that might be shared, screen-recorded, or read by someone else.",
         ))
-        profanity_v.addLayout(profanity_row)
-        layout.addWidget(profanity_card)
+        v.addWidget(_row("When I swear", "Applied after the AI has cleaned up your text.", profanity_row))
+        writing.addWidget(g)
 
-        # --- System ---
-        layout.addWidget(_label_title("System"))
-        from src import autostart
+        g, v = _group("Corrections")
+        self.self_correction_cb = QCheckBox("Remove what I retract")
+        self.self_correction_cb.setChecked(engine.config.self_correction)
+        self.self_correction_cb.stateChanged.connect(lambda s: engine.set_self_correction(s != 0))
+        v.addWidget(_check_row(
+            self.self_correction_cb,
+            "Say \"scratch that\", \"no wait\" or \"no, no, ...\" at the start of a sentence and the sentence before it is dropped, "
+            "keeping the rest. Only those exact phrases count, so ordinary speech is never cut, and the original wording stays in "
+            "History under Show Raw Transcript. Off by default.",
+        ))
+        writing.addWidget(g)
+        writing.addStretch()
 
-        self.autostart_cb = QCheckBox("Start with Windows")
-        self.autostart_cb.setChecked(autostart.is_enabled())
-        self.autostart_cb.stateChanged.connect(lambda s: autostart.set_enabled(s != 0))
-        layout.addWidget(self.autostart_cb)
-
-        self.pill_cb = QCheckBox("Show Floating Pill")
+        # ---------- Pill ----------
+        g, v = _group("Floating pill")
+        self.pill_cb = QCheckBox("Show the floating pill")
         self.pill_cb.setChecked(True)
         self.pill_cb.stateChanged.connect(self._on_pill_visibility_changed)
-        layout.addWidget(self.pill_cb)
-
-        click_card, click_v = _shortcut_card(
-            "Clicking the Pill",
-            "The pill can be dragged anywhere on screen. While recording, its x cancels (nothing is typed) "
-            "and its check finishes.",
-        )
-        click_row = QHBoxLayout()
+        v.addWidget(_check_row(self.pill_cb, "Hide it and you can still use the keyboard shortcuts or the tray icon."))
+        self.always_on_top_cb = QCheckBox("Keep it on top, even over fullscreen apps and games")
+        self.always_on_top_cb.setChecked(engine.config.pill_always_on_top)
+        self.always_on_top_cb.stateChanged.connect(self._on_always_on_top_changed)
+        v.addWidget(_check_row(self.always_on_top_cb))
         self.pill_click_cb = _no_wheel(QComboBox())
-        self.pill_click_cb.addItem("Start dictating (click again, or the check, to finish)", "dictate")
+        self.pill_click_cb.addItem("Start dictating", "dictate")
         self.pill_click_cb.addItem("Open the dashboard", "dashboard")
-        self.pill_click_cb.addItem("Nothing (hotkeys only)", "none")
+        self.pill_click_cb.addItem("Nothing (keyboard only)", "none")
         click_idx = self.pill_click_cb.findData(engine.config.pill_click_action)
         self.pill_click_cb.setCurrentIndex(click_idx if click_idx >= 0 else 0)
         self.pill_click_cb.currentIndexChanged.connect(self._on_pill_click_action_changed)
-        click_row.addWidget(self.pill_click_cb, 1)
-        click_v.addLayout(click_row)
-        layout.addWidget(click_card)
+        v.addWidget(_row("Clicking the pill", "While recording, its x cancels (nothing is typed) and its check finishes.", self.pill_click_cb))
+        pill.addWidget(g)
 
-        look_card, look_v = _shortcut_card(
-            "Pill Shape & Position",
-            "Pick the pill's shape and snap it to a corner or edge of the screen. You can still drag it "
-            "anywhere; Reset Position puts it back at the bottom centre.",
-        )
-        look_row = QHBoxLayout()
+        g, v = _group("Shape and position", "Drag the pill anywhere, or snap it to a spot. Reset puts it back at the bottom centre.")
         self.pill_shape_cb = _no_wheel(QComboBox())
-        self.pill_shape_cb.addItem("Shape: Pill (rounded)", "pill")
-        self.pill_shape_cb.addItem("Shape: Box (rounded rectangle)", "box")
+        self.pill_shape_cb.addItem("Pill (rounded)", "pill")
+        self.pill_shape_cb.addItem("Box (rounded rectangle)", "box")
         shape_idx = self.pill_shape_cb.findData(engine.config.pill_shape)
         self.pill_shape_cb.setCurrentIndex(shape_idx if shape_idx >= 0 else 0)
         self.pill_shape_cb.currentIndexChanged.connect(self._on_pill_shape_changed)
-        look_row.addWidget(self.pill_shape_cb, 1)
+        v.addWidget(_row("Shape", "", self.pill_shape_cb))
         self.pill_preset_cb = _no_wheel(QComboBox())
         self.pill_preset_cb.addItem("Move to...", None)
         for key, (label, _h, _v) in POSITION_PRESETS.items():
             self.pill_preset_cb.addItem(label, key)
         self.pill_preset_cb.activated.connect(self._on_pill_preset_chosen)
-        look_row.addWidget(self.pill_preset_cb, 1)
-        self.reset_pill_btn = QPushButton("Reset Position")
+        self.reset_pill_btn = QPushButton("Reset position")
         self.reset_pill_btn.clicked.connect(self._on_reset_pill_position)
-        look_row.addWidget(self.reset_pill_btn)
-        look_v.addLayout(look_row)
-        layout.addWidget(look_card)
+        position_row = QHBoxLayout()
+        position_row.addWidget(self.pill_preset_cb, 1)
+        position_row.addWidget(self.reset_pill_btn)
+        v.addWidget(_row("Position", "", position_row))
+        pill.addWidget(g)
+        pill.addStretch()
 
-        self.minimize_to_tray_cb = QCheckBox("Keep running in the tray when I close the window")
-        self.minimize_to_tray_cb.setChecked(engine.config.minimize_to_tray)
-        self.minimize_to_tray_cb.stateChanged.connect(lambda s: engine.set_minimize_to_tray(s != 0))
-        layout.addWidget(self.minimize_to_tray_cb)
-        layout.addWidget(_desc_label(
-            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">Ticked: closing the window hides it and '
-            f'dictation keeps working. Unticked: closing the window quits {APP_NAME} completely.</span>'
-        ))
-
-        self.always_on_top_cb = QCheckBox("Always Keep Pill on Top (including fullscreen apps/games)")
-        self.always_on_top_cb.setChecked(engine.config.pill_always_on_top)
-        self.always_on_top_cb.stateChanged.connect(self._on_always_on_top_changed)
-        layout.addWidget(self.always_on_top_cb)
-
-        # --- Audio Feedback ---
-        layout.addWidget(_label_title("Typing & Feedback"))
-
-        self.audio_cues_cb = QCheckBox("Play a Sound When Dictation Starts/Stops")
-        self.audio_cues_cb.setChecked(engine.config.audio_cues_enabled)
-        self.audio_cues_cb.stateChanged.connect(lambda s: engine.set_audio_cues_enabled(s != 0))
-        layout.addWidget(self.audio_cues_cb)
-
-        self.auto_copy_cb = QCheckBox("Always Copy Transcribed Text to Clipboard")
-        self.auto_copy_cb.setChecked(engine.config.injector.auto_copy_to_clipboard)
-        self.auto_copy_cb.stateChanged.connect(lambda s: engine.set_auto_copy_to_clipboard(s != 0))
-        layout.addWidget(self.auto_copy_cb)
-
-        self.trailing_space_cb = QCheckBox("Add a Space After Each Dictated Sentence")
-        self.trailing_space_cb.setToolTip("So the next dictation doesn't run into the previous one ('today.Next').")
-        self.trailing_space_cb.setChecked(engine.config.injector.trailing_space)
-        self.trailing_space_cb.stateChanged.connect(lambda s: engine.set_trailing_space(s != 0))
-        layout.addWidget(self.trailing_space_cb)
-
-        # --- Per-app styles (src/app_context.py) ---
-        layout.addWidget(_label_title("Per-App Styles"))
-        self.app_styles_cb = QCheckBox("Adapt Formatting to the App You're Typing In")
+        # ---------- App Styles (src/app_context.py) ----------
+        g, v = _group("Adapt to the app I'm typing in")
+        self.app_styles_cb = QCheckBox("Format differently per app")
         self.app_styles_cb.setToolTip(
             "Chat apps: a one-line message drops its final period.\n"
             "Code editors / terminals: also no final period, and no trailing space.\n"
@@ -422,7 +486,7 @@ class _GeneralSettings(QWidget):
         )
         self.app_styles_cb.setChecked(engine.config.app_styles_enabled)
         self.app_styles_cb.stateChanged.connect(self._on_app_styles_toggled)
-        layout.addWidget(self.app_styles_cb)
+        v.addWidget(_check_row(self.app_styles_cb, "Chat apps: no final period on one-line messages. Code editors and terminals: no final period and no trailing space."))
         self.app_styles_table = QTableWidget(0, 3)
         self.app_styles_table.setHorizontalHeaderLabels(["APP (.EXE)", "STYLE", ""])
         header = self.app_styles_table.horizontalHeader()
@@ -432,65 +496,88 @@ class _GeneralSettings(QWidget):
         self.app_styles_table.setColumnWidth(2, 44)
         self.app_styles_table.verticalHeader().setVisible(False)
         self.app_styles_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.app_styles_table.setMinimumHeight(180)
-        layout.addWidget(self.app_styles_table)
+        self.app_styles_table.setMinimumHeight(260)
+        v.addWidget(self.app_styles_table)
         add_row = QHBoxLayout()
         self.app_name_in = QLineEdit(placeholderText="App to add, e.g. obsidian.exe")
         self.app_style_in = _no_wheel(QComboBox())
         for style in STYLES:
             self.app_style_in.addItem(STYLE_LABELS[style], style)
-        add_app_btn = QPushButton("Add App")
+        add_app_btn = QPushButton("Add app")
         add_app_btn.clicked.connect(self._add_app_style)
         self.app_name_in.returnPressed.connect(self._add_app_style)
         add_row.addWidget(self.app_name_in, 1)
         add_row.addWidget(self.app_style_in, 1)
         add_row.addWidget(add_app_btn)
-        layout.addLayout(add_row)
+        v.addLayout(add_row)
+        apps.addWidget(g)
+        apps.addStretch()
         self._refresh_app_styles()
 
-        # --- Testing ---
-        layout.addWidget(_label_title("Recovery & Corrections"))
-        keep_row = QHBoxLayout()
-        keep_row.addWidget(QLabel("Keep the audio of my last"))
+        # ---------- Privacy ----------
+        g, v = _group("Recent recordings", "Keep the audio of your latest dictations so History can re-transcribe one that came out wrong.")
         self.keep_recent_cb = _no_wheel(QComboBox())
-        for count, label in ((0, "0 (off)"), (3, "3"), (5, "5"), (10, "10")):
+        for count, label in ((0, "Don't keep any"), (3, "Last 3"), (5, "Last 5"), (10, "Last 10")):
             self.keep_recent_cb.addItem(label, count)
         keep_idx = self.keep_recent_cb.findData(engine.config.keep_recent_recordings)
         self.keep_recent_cb.setCurrentIndex(keep_idx if keep_idx >= 0 else 1)
         self.keep_recent_cb.currentIndexChanged.connect(lambda _i: engine.set_keep_recent_recordings(self.keep_recent_cb.currentData()))
-        keep_row.addWidget(self.keep_recent_cb)
-        keep_row.addWidget(QLabel("dictations"))
-        keep_row.addStretch()
-        layout.addLayout(keep_row)
-        layout.addWidget(_desc_label(
-            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">If a dictation came out wrong, open History and '
-            f'press Re-transcribe to run its saved audio again with a slower, more careful method. Older clips are '
-            f'deleted automatically. The audio stays on this PC.</span>'
-        ))
-        self.self_correction_cb = QCheckBox("Remove what I retract (say \"scratch that\", \"no wait\", or \"no, no, ...\")")
-        self.self_correction_cb.setChecked(engine.config.self_correction)
-        self.self_correction_cb.stateChanged.connect(lambda s: engine.set_self_correction(s != 0))
-        layout.addWidget(self.self_correction_cb)
-        layout.addWidget(_desc_label(
-            f'<span style="color:{theme.TEXT_SECONDARY}; font-size: 8pt;">When a sentence starts with one of those phrases, '
-            f'the sentence before it is dropped and the rest is kept. Only those exact phrases count, so ordinary speech '
-            f'is never cut. The original wording stays in History under Show Raw Transcript.</span>'
-        ))
+        v.addWidget(_row("Keep audio for", "Older clips are deleted automatically. The audio never leaves this PC.", self.keep_recent_cb))
+        privacy.addWidget(g)
 
-        layout.addWidget(_label_title("Testing"))
-        self.save_recordings_cb = QCheckBox("Save Recordings for Testing (stores your dictation audio on this PC)")
+        g, v = _group("History")
+        self.storage_stats_label = QLabel("")
+        self.storage_stats_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; background: transparent;")
+        v.addWidget(self.storage_stats_label)
+        self.retention_cb = _no_wheel(QComboBox())
+        self.retention_cb.addItem("Never", "never")
+        self.retention_cb.addItem("After 3 months", "3_months")
+        self.retention_cb.addItem("After 6 months", "6_months")
+        self.retention_cb.addItem("After 1 year", "1_year")
+        retention_idx = self.retention_cb.findData(engine.config.db_retention_policy)
+        if retention_idx >= 0:
+            self.retention_cb.setCurrentIndex(retention_idx)
+        self.retention_cb.currentIndexChanged.connect(self._on_retention_changed)
+        v.addWidget(_row("Auto-delete old history", "Pinned entries are always kept.", self.retention_cb))
+        clear_btn = QPushButton("Clear the oldest 25% of history")
+        clear_btn.setObjectName("danger")
+        clear_btn.clicked.connect(self._clear_oldest)
+        v.addWidget(clear_btn, alignment=Qt.AlignLeft)
+        privacy.addWidget(g)
+        self._refresh_storage_stats()
+
+        g, v = _group("Testing")
+        self.save_recordings_cb = QCheckBox("Save recordings for testing")
         self.save_recordings_cb.setToolTip(
             "Keeps each dictation's audio and transcript so scripts/eval_dictation.py can measure accuracy "
             "and speed on your own voice. Nothing leaves this machine. Leave off for normal use."
         )
         self.save_recordings_cb.setChecked(engine.config.save_recordings_for_testing)
         self.save_recordings_cb.stateChanged.connect(lambda s: engine.set_save_recordings_for_testing(s != 0))
-        layout.addWidget(self.save_recordings_cb)
-        open_recordings_btn = QPushButton("Open Recordings Folder")
+        v.addWidget(_check_row(self.save_recordings_cb, "Stores every dictation's audio on this PC so accuracy can be measured on your own voice. Leave off for normal use."))
+        open_recordings_btn = QPushButton("Open recordings folder")
         open_recordings_btn.clicked.connect(self._open_recordings_folder)
-        layout.addWidget(open_recordings_btn, alignment=Qt.AlignLeft)
+        v.addWidget(open_recordings_btn, alignment=Qt.AlignLeft)
+        privacy.addWidget(g)
+        privacy.addStretch()
 
-        layout.addStretch()
+        # ---------- Startup ----------
+        g, v = _group("Startup and window")
+        from src import autostart
+
+        self.autostart_cb = QCheckBox("Start Wisperno Pro with Windows")
+        self.autostart_cb.setChecked(autostart.is_enabled())
+        self.autostart_cb.stateChanged.connect(lambda s: autostart.set_enabled(s != 0))
+        v.addWidget(_check_row(self.autostart_cb, "So the pill is ready as soon as you sign in. The AI models take a few seconds to load."))
+        self.minimize_to_tray_cb = QCheckBox("Keep running in the tray when I close the window")
+        self.minimize_to_tray_cb.setChecked(engine.config.minimize_to_tray)
+        self.minimize_to_tray_cb.stateChanged.connect(lambda s: engine.set_minimize_to_tray(s != 0))
+        v.addWidget(_check_row(
+            self.minimize_to_tray_cb,
+            f"Ticked: closing the window hides it and dictation keeps working. Unticked: closing the window quits {APP_NAME} completely.",
+        ))
+        startup.addWidget(g)
+        startup.addStretch()
 
     def _refresh_app_styles(self) -> None:
         styles = self.engine.config.app_styles
@@ -529,6 +616,22 @@ class _GeneralSettings(QWidget):
     def _remove_app_style(self, app: str) -> None:
         self.engine.set_app_style(app, None)
         self._refresh_app_styles()
+
+    def _refresh_storage_stats(self) -> None:
+        stats = self.engine.db.get_database_storage_stats()
+        self.storage_stats_label.setText(f'{stats["size_mb_formatted"]} on disk - {stats["record_count"]} saved dictations')
+
+    def _on_retention_changed(self, _index: int) -> None:
+        cfg = self.engine.config
+        cfg.db_retention_policy = self.retention_cb.currentData()
+        self.engine.db.prune_history(cfg.db_retention_policy)
+        self.engine.save_config()
+        self._refresh_storage_stats()
+
+    def _clear_oldest(self) -> None:
+        deleted = self.engine.db.clear_oldest_transcripts(fraction=0.25)
+        self._refresh_storage_stats()
+        QMessageBox.information(self, APP_NAME, f"Deleted {deleted} of the oldest transcripts (pinned ones kept).")
 
     def _open_recordings_folder(self) -> None:
         import os
@@ -602,96 +705,67 @@ class _GeneralSettings(QWidget):
 
 
 class _AdvancedSettings(QWidget):
-    """Model/hardware tuning: Whisper model, LLM path, GPU layer offload, VAD sensitivity."""
+    """AI Engine tab: model selection and hardware offloading. Unlike the other tabs this one
+    batches its changes behind an explicit Apply, because most of them reload Whisper/the LLM."""
 
     def __init__(self, engine):
         super().__init__()
         self.engine = engine
         layout = make_scrollable_layout(self)
         layout.setContentsMargins(28, 22, 28, 22)
-        layout.addWidget(_desc_label(
-            f'<span style="color:{theme.TEXT_SECONDARY}">These control model selection and hardware '
-            "offloading. The defaults work well on most GPUs - change them only if you know why. "
-            "Live VRAM/RAM telemetry moved to the System Usage tab.</span>"
+        layout.setSpacing(16)
+        layout.addWidget(_hint(
+            "The defaults work well on most graphics cards - change these only if you know why. "
+            "Live GPU and memory use is in the System Usage tab."
         ))
 
-        # --- Engine Preset - a bordered, padded container (mockup:
-        # assets/screenshots/new assets/) rather than laid straight into the
-        # tab's own outer layout like every other Advanced control. ---
-        preset_card = QFrame(objectName="presetCard")
-        # Scoped by id: a bare "QFrame { }" also matched every QLabel inside
-        # (QLabel is a QFrame), boxing each label in its own border.
-        preset_card.setStyleSheet(
-            f"#presetCard {{ background-color: {theme.BG_CARD}; border: 1px solid {theme.BORDER_SUBTLE}; "
-            f"border-radius: 12px; }}"
-        )
-        preset_layout = QVBoxLayout(preset_card)
-        preset_layout.setContentsMargins(20, 20, 20, 20)
-
-        preset_row = QHBoxLayout()
-        preset_title = _label_title("Engine Preset")
-        preset_title.setToolTip(
-            "Selects the local AI engine. All tiers run 100% locally on your machine with zero data leaving your device."
-        )
-        preset_row.addWidget(preset_title)
-        preset_row.addStretch()
-        # "&&": a single "&" is a Qt mnemonic marker and was silently dropped from the label.
-        compare_btn = QPushButton("Compare Presets && Benchmarks")
-        compare_btn.clicked.connect(self._show_compare_presets)
-        preset_row.addWidget(compare_btn)
-        preset_layout.addLayout(preset_row)
+        # ---------- Engine preset ----------
+        g, v = _group("Engine preset", "Which local AI cleans up your dictation. Everything runs on this PC.")
         self.preset_cb = _no_wheel(QComboBox())
         for i, (key, preset) in enumerate(MODEL_PRESETS.items()):
             self.preset_cb.addItem(preset["label"], key)
             self.preset_cb.setItemData(i, preset["tooltip"], Qt.ToolTipRole)
         self.preset_cb.setCurrentIndex(self._initial_preset_index(engine))
         self.preset_badge = QLabel("")
-        self.preset_badge.setStyleSheet(
-            f"color: {theme.ACCENT_PRIMARY}; font-size: 8pt; font-weight: 600;"
-        )
-        self.preset_description = QLabel("")
-        self.preset_description.setWordWrap(True)
-        self.preset_description.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 8pt;")
+        self.preset_badge.setStyleSheet(f"color: {theme.ACCENT_PRIMARY}; font-size: 9pt; font-weight: 600; background: transparent;")
+        self.preset_description = _hint("")
         self.preset_cb.currentIndexChanged.connect(self._update_preset_description)
         self._update_preset_description()
-        preset_layout.addWidget(self.preset_cb)
-        preset_layout.addWidget(self.preset_badge)
-        preset_layout.addWidget(self.preset_description)
-        layout.addWidget(preset_card)
-
-        # Transition indicator: hidden until a preset switch triggers a reload,
-        # then tracks engine.state_changed's "loading" state so the user sees
-        # a clean in-progress signal instead of the GUI silently doing nothing
-        # (reload itself already runs off the GUI thread - see restart_engines()).
-        # Wording deliberately generic, not "switching preset" specifically -
-        # this same "loading" state also fires on the app's very first startup
-        # (state_changed.emit("loading") in engine.start()), and the banner
-        # would otherwise be visible then too, before any preset switch happened.
-        self.reload_banner = QLabel("⟳ Loading engine (Whisper + LLM) - this can take a few seconds...")
+        # "&&": a single "&" is a Qt mnemonic marker and was silently dropped from the label.
+        compare_btn = QPushButton("Compare presets && benchmarks")
+        compare_btn.clicked.connect(self._show_compare_presets)
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(self.preset_cb, 1)
+        preset_row.addWidget(compare_btn)
+        v.addLayout(preset_row)
+        v.addWidget(self.preset_badge)
+        v.addWidget(self.preset_description)
+        # Hidden until a preset switch triggers a reload, then tracks engine.state_changed's
+        # "loading" state so the user sees a clean in-progress signal. Wording is generic on
+        # purpose: the same "loading" state also fires on the app's first startup.
+        self.reload_banner = QLabel("Loading the AI engine (Whisper + language model) - this can take a few seconds...")
         self.reload_banner.setWordWrap(True)
         self.reload_banner.setStyleSheet(
-            f"background-color: {theme.INPUT_BG}; color: {theme.ACCENT_PRIMARY}; "
-            f"border-radius: 6px; padding: 6px 10px; font-weight: 600;"
+            f"background-color: {theme.BG_APP}; color: {theme.ACCENT_PRIMARY}; "
+            f"border: 1px solid {theme.BORDER_SUBTLE}; border-radius: 8px; padding: 8px 12px; font-weight: 600;"
         )
         self.reload_banner.setVisible(False)
-        layout.addWidget(self.reload_banner)
+        v.addWidget(self.reload_banner)
         if hasattr(engine, "state_changed"):
             engine.state_changed.connect(self._on_engine_state_changed)
+        layout.addWidget(g)
 
-        # Each control gets its own "label + (?) header row, input below" block -
-        # a fixed-size help button (see _help_button) directly adjacent to its
-        # own label, never sharing a row with a growing input widget, which was
-        # the actual cause of it looking misaligned/floating/clipped before.
-        def _labeled_row(label_text: str, help_btn: QPushButton) -> QVBoxLayout:
-            block = QVBoxLayout()
-            header = QHBoxLayout()
-            header.addWidget(QLabel(label_text))
-            header.addStretch()
-            header.addWidget(help_btn)
-            block.addLayout(header)
-            return block
-
-        whisper_block = _labeled_row("Whisper Model:", _help_button(
+        # ---------- Speech recognition ----------
+        g, v = _group("Speech recognition")
+        self.whisper_cb = _no_wheel(QComboBox())
+        self.whisper_cb.setFont(QFont(theme.FONT_FAMILY_MONO))
+        self.whisper_cb.addItems(["large-v3-turbo", "medium.en", "small.en", "base.en"])
+        idx = self.whisper_cb.findText(engine.config.whisper.model_name)
+        if idx >= 0:
+            self.whisper_cb.setCurrentIndex(idx)
+        whisper_row = QHBoxLayout()
+        whisper_row.addWidget(self.whisper_cb, 1)
+        whisper_row.addWidget(_help_button(
             "Whisper Model",
             "The speech-to-text engine that turns your voice into raw text before any cleanup or "
             "polish happens. A larger model recognizes speech more accurately, especially accents, "
@@ -699,35 +773,15 @@ class _AdvancedSettings(QWidget):
             "large-v3-turbo for typical desktop use - near-perfect recognition with low latency on any "
             "modern GPU. Drop to medium.en / small.en / base.en only if VRAM is genuinely tight.",
         ))
-        self.whisper_cb = _no_wheel(QComboBox())
-        self.whisper_cb.setFont(QFont(theme.FONT_FAMILY_MONO))
-        self.whisper_cb.addItems(["large-v3-turbo", "medium.en", "small.en", "base.en"])
-        idx = self.whisper_cb.findText(engine.config.whisper.model_name)
-        if idx >= 0:
-            self.whisper_cb.setCurrentIndex(idx)
-        whisper_block.addWidget(self.whisper_cb)
-        layout.addLayout(whisper_block)
-
-        llm_path_block = _labeled_row("Local LLM Path:", _help_button(
-            "Local LLM Path",
-            "The GGUF model file that powers LLM-based text transformation (Polish Selected Text, "
-            "Transforms, and dictation when 'Automatically run LLM polish' is on). This always points "
-            "at a file already on disk - selecting an Engine Preset above fills this in for you.",
-            "Leave this on whichever Engine Preset you picked above. Only Browse to a custom .gguf "
-            "file if you've downloaded one yourself and know what it needs (chat-template compatible, "
-            "fits your VRAM).",
-        ))
-        path_row = QHBoxLayout()
-        self.llm_path_edit = QLineEdit(engine.config.llm.model_path)
-        self.llm_path_edit.setFont(QFont(theme.FONT_FAMILY_MONO))
-        path_row.addWidget(self.llm_path_edit, 1)
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(self._browse_model)
-        path_row.addWidget(browse_btn)
-        llm_path_block.addLayout(path_row)
-        layout.addLayout(llm_path_block)
-
-        vad_block = _labeled_row("VAD Silence Sensitivity (ms):", _help_button(
+        v.addWidget(_row("Whisper model", "Bigger is more accurate and uses more graphics memory.", whisper_row))
+        self.vad_sensitivity_spin = _no_wheel(QSpinBox())
+        self.vad_sensitivity_spin.setRange(50, 2000)
+        self.vad_sensitivity_spin.setSingleStep(50)
+        self.vad_sensitivity_spin.setSuffix(" ms")
+        self.vad_sensitivity_spin.setValue(engine.config.whisper.vad_min_silence_duration_ms)
+        vad_row = QHBoxLayout()
+        vad_row.addWidget(self.vad_sensitivity_spin, 1)
+        vad_row.addWidget(_help_button(
             "VAD Silence Sensitivity",
             "Voice Activity Detection (VAD) watches for silence to know when you've stopped talking "
             "and automatically ends the recording. This value is how long a pause has to last before "
@@ -736,12 +790,28 @@ class _AdvancedSettings(QWidget):
             "600-800ms) in a quiet room if recordings feel slow to end; raise it if mid-sentence "
             "pauses are cutting your dictation off early.",
         ))
-        self.vad_sensitivity_spin = _no_wheel(QSpinBox())
-        self.vad_sensitivity_spin.setRange(50, 2000)
-        self.vad_sensitivity_spin.setSingleStep(50)
-        self.vad_sensitivity_spin.setValue(engine.config.whisper.vad_min_silence_duration_ms)
-        vad_block.addWidget(self.vad_sensitivity_spin)
-        layout.addLayout(vad_block)
+        v.addWidget(_row("Pause length that counts as silence", "Lower it in a quiet room; raise it if sentences get cut off.", vad_row))
+        layout.addWidget(g)
+
+        # ---------- Language model ----------
+        g, v = _group("Language model")
+        self.llm_path_edit = QLineEdit(engine.config.llm.model_path)
+        self.llm_path_edit.setFont(QFont(theme.FONT_FAMILY_MONO))
+        browse_btn = QPushButton("Browse...")
+        browse_btn.clicked.connect(self._browse_model)
+        path_row = QHBoxLayout()
+        path_row.addWidget(self.llm_path_edit, 1)
+        path_row.addWidget(browse_btn)
+        path_row.addWidget(_help_button(
+            "Local LLM Path",
+            "The GGUF model file that powers LLM-based text transformation (Polish Selected Text, "
+            "Transforms, and dictation when 'Automatically run LLM polish' is on). This always points "
+            "at a file already on disk - selecting an Engine Preset above fills this in for you.",
+            "Leave this on whichever Engine Preset you picked above. Only Browse to a custom .gguf "
+            "file if you've downloaded one yourself and know what it needs (chat-template compatible, "
+            "fits your VRAM).",
+        ))
+        v.addWidget(_row("Model file", "Filled in for you by the preset above.", path_row))
 
         # --- VRAM offload ---
         self._total_layers = self._resolve_total_layers(engine)
@@ -750,11 +820,21 @@ class _AdvancedSettings(QWidget):
             f"{self._total_layers} (Full GPU) gives the fastest speed (~1.5s). Lower this only if you "
             "need to free up GPU memory for games or creative software."
         )
-        offload_row = QHBoxLayout()
-        offload_title = _label_title("Offload Layers to GPU")
-        offload_row.addWidget(offload_title)
-        offload_row.addStretch()
-        offload_row.addWidget(_help_button(
+        self.n_gpu_layers_slider = _no_wheel(QSlider(Qt.Orientation.Horizontal))
+        self.n_gpu_layers_slider.setRange(min(8, self._total_layers), self._total_layers)
+        self.n_gpu_layers_slider.setToolTip(offload_tooltip)
+        # n_gpu_layers=-1 means "all layers" (llama.cpp's own convention) - map that to the
+        # slider's max rather than clamping it down to the min, which would silently
+        # misrepresent a 100%-GPU config as barely-offloaded.
+        configured = engine.config.llm.n_gpu_layers
+        initial_value = self._total_layers if configured < 0 else max(8, min(self._total_layers, configured))
+        self.n_gpu_layers_slider.setValue(initial_value)
+        self.n_gpu_layers_value_label = QLabel("")
+        self.n_gpu_layers_value_label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; background: transparent;")
+        slider_row = QHBoxLayout()
+        slider_row.addWidget(self.n_gpu_layers_slider, 1)
+        slider_row.addWidget(self.n_gpu_layers_value_label)
+        slider_row.addWidget(_help_button(
             "Offload Layers to GPU",
             "The LLM is made of layers; each one can run on your graphics card (fast) or fall back to "
             f"system RAM/CPU (slower). This machine's loaded model has {self._total_layers} layers total.",
@@ -762,40 +842,24 @@ class _AdvancedSettings(QWidget):
             "generation. Lower it only if you need to free VRAM for something else running "
             "simultaneously, like a game or creative app - expect noticeably slower dictation in exchange.",
         ))
-        layout.addLayout(offload_row)
-        layout.addWidget(_desc_label(
-            f'<span style="color:{theme.TEXT_SECONDARY}">Adjust to balance VRAM usage and CPU RAM '
-            "offloading. Lower = less VRAM, more system RAM and slower generation. Estimates below are "
-            "indicative (scaled from the loaded model's own file size and layer count) - the actual "
-            "reload after Save measures the real numbers.</span>"
+        v.addWidget(_row(
+            "Layers on the graphics card",
+            "All of them is fastest. Lower it only to free graphics memory for a game; dictation gets slower.",
+            slider_row,
         ))
-        slider_row = QHBoxLayout()
-        self.n_gpu_layers_slider = _no_wheel(QSlider(Qt.Orientation.Horizontal))
-        self.n_gpu_layers_slider.setRange(min(8, self._total_layers), self._total_layers)
-        self.n_gpu_layers_slider.setToolTip(offload_tooltip)
-        # n_gpu_layers=-1 means "all layers" (llama.cpp's own convention) - map
-        # that to the slider's max rather than clamping it down to the min,
-        # which would silently misrepresent a 100%-GPU config as barely-offloaded.
-        configured = engine.config.llm.n_gpu_layers
-        initial_value = self._total_layers if configured < 0 else max(8, min(self._total_layers, configured))
-        self.n_gpu_layers_slider.setValue(initial_value)
-        self.n_gpu_layers_value_label = QLabel("")
-        slider_row.addWidget(self.n_gpu_layers_slider, 1)
-        slider_row.addWidget(self.n_gpu_layers_value_label)
-        layout.addLayout(slider_row)
-
-        self.gpu_estimate_label = QLabel("")
-        self.gpu_estimate_label.setWordWrap(True)
-        self.gpu_estimate_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY};")
-        layout.addWidget(self.gpu_estimate_label)
+        self.gpu_estimate_label = _hint("")
+        v.addWidget(self.gpu_estimate_label)
         self._update_gpu_layers_label(self.n_gpu_layers_slider.value())
         self.n_gpu_layers_slider.valueChanged.connect(self._update_gpu_layers_label)
 
-        kv_row = QHBoxLayout()
-        self.kv_cache_quant_cb = QCheckBox("Q8_0 KV Cache Compression (saves ~600MB VRAM)")
+        self.kv_cache_quant_cb = QCheckBox("Compress the model's working memory (saves ~600 MB)")
         self.kv_cache_quant_cb.setChecked(engine.config.llm.kv_cache_quantization)
-        kv_row.addWidget(self.kv_cache_quant_cb)
-        kv_row.addStretch()
+        kv_hint = _check_row(
+            self.kv_cache_quant_cb,
+            "Q8_0 KV-cache compression. No measurable quality loss; the Flagship preset turns it off on purpose.",
+        )
+        kv_row = QHBoxLayout()
+        kv_row.addWidget(kv_hint, 1)
         kv_row.addWidget(_help_button(
             "KV-Cache Compression",
             "The KV (key/value) cache is the model's short-term working memory for the conversation "
@@ -803,48 +867,20 @@ class _AdvancedSettings(QWidget):
             "footprint by roughly 600MB.",
             "Leave it on for Standard/Turbo (the default) - no measurable quality loss. Flagship ships "
             "it off on purpose, trading that VRAM back for maximum output fidelity instead.",
-        ))
-        layout.addLayout(kv_row)
-
-        # --- Disk / retention ---
-        retention_title = _label_title("History Storage")
-        retention_title.setToolTip(
-            "Automatically deletes older transcripts after the selected period to save disk space. "
-            "Pinned entries are always preserved."
-        )
-        layout.addWidget(retention_title)
-        self.storage_stats_label = QLabel("")
-        layout.addWidget(self.storage_stats_label)
-        self._refresh_storage_stats(engine)
-
-        retention_row = QHBoxLayout()
-        retention_row.addWidget(QLabel("Auto-delete history older than:"))
-        self.retention_cb = _no_wheel(QComboBox())
-        self.retention_cb.addItem("Never", "never")
-        self.retention_cb.addItem("3 months", "3_months")
-        self.retention_cb.addItem("6 months", "6_months")
-        self.retention_cb.addItem("1 year", "1_year")
-        idx = self.retention_cb.findData(engine.config.db_retention_policy)
-        if idx >= 0:
-            self.retention_cb.setCurrentIndex(idx)
-        self.retention_cb.setToolTip(
-            "Automatically deletes older transcripts after the selected period to save disk space. "
-            "Pinned entries are always preserved."
-        )
-        retention_row.addWidget(self.retention_cb)
-        layout.addLayout(retention_row)
-
-        clear_btn = QPushButton("Clear Oldest Transcripts (oldest 25%, pinned kept)")
-        clear_btn.setObjectName("danger")
-        clear_btn.clicked.connect(lambda: self._clear_oldest(engine))
-        layout.addWidget(clear_btn)
+        ), alignment=Qt.AlignTop)
+        v.addLayout(kv_row)
+        layout.addWidget(g)
 
         layout.addStretch()
 
-        apply_btn = QPushButton("Apply")
+        apply_row = QHBoxLayout()
+        apply_row.addWidget(_hint("Applying reloads the AI models; dictation is unavailable for a few seconds."), 1)
+        apply_btn = QPushButton("Apply changes")
         apply_btn.setObjectName("primary")
+        apply_btn.setMinimumWidth(180)
         apply_btn.clicked.connect(self._apply)
-        layout.addWidget(apply_btn)
+        apply_row.addWidget(apply_btn)
+        layout.addLayout(apply_row)
 
     def _apply(self) -> None:
         """Advanced settings can require a Whisper/LLM reload, so - unlike General's
@@ -892,11 +928,9 @@ class _AdvancedSettings(QWidget):
         cfg.llm.flash_attn = _selected_preset.get("flash_attn", cfg.llm.flash_attn)
         cfg.llm.chat_style = _selected_preset.get("chat_style", cfg.llm.chat_style)
         cfg.whisper.vad_min_silence_duration_ms = self.vad_sensitivity_spin.value()
-        cfg.db_retention_policy = self.retention_cb.currentData()
-        pruned = self.engine.db.prune_history(cfg.db_retention_policy)
 
         self.engine.save_config()
-        note = f" ({pruned} old record(s) pruned.)" if pruned else ""
+        note = ""
         if model_dirty:
             self.engine.restart_engines()
             QMessageBox.information(
@@ -1056,18 +1090,6 @@ class _AdvancedSettings(QWidget):
         self.gpu_estimate_label.setText(
             f"Estimated VRAM Impact: ~{est_vram_gb:.1f} GB  |  Estimated Latency Impact: {latency_txt}"
         )
-
-    def _refresh_storage_stats(self, engine) -> None:
-        stats = engine.db.get_database_storage_stats()
-        self.storage_stats_label.setText(
-            f'<span style="color:{theme.TEXT_SECONDARY}">{stats["size_mb_formatted"]} - '
-            f'{stats["record_count"]} records</span>'
-        )
-
-    def _clear_oldest(self, engine) -> None:
-        deleted = engine.db.clear_oldest_transcripts(fraction=0.25)
-        self._refresh_storage_stats(engine)
-        QMessageBox.information(self, APP_NAME, f"Deleted {deleted} of the oldest transcripts (pinned ones kept).")
 
     def _browse_model(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Select GGUF LLM model", "", "GGUF model (*.gguf);;All files (*.*)")

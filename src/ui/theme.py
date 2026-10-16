@@ -82,6 +82,21 @@ SCROLLBAR_HANDLE = "#34322F"
 VRAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF5714, stop:1 #FF9A3D)"
 RAM_GRADIENT = "qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6B6962, stop:1 #AAA79E)"
 
+# System Usage: ring gauges (start, end colour) and the disk-space bar segments.
+GAUGE_VRAM = ("#FF5714", "#FF9A3D")
+GAUGE_RAM = ("#AAA79E", "#ECEBE6")
+STORAGE_APP = "#FF5714"
+STORAGE_MODELS = "#E3C07A"
+STORAGE_HISTORY = "#6FCF97"
+STORAGE_RECORDINGS = "#AAA79E"
+
+
+def wash(hex_color: str, alpha: float = 0.14) -> str:
+    """A soft, see-through tint of a #RRGGBB colour (as a QSS rgba()) - chip backgrounds."""
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)}, {alpha})"
+
+
 # The site's own faces (bundled in assets/fonts - see load_fonts()), with the
 # Windows system faces as the fallback if a font file is ever missing.
 FONT_FAMILY = "Inter Tight, Segoe UI Variable Text, Segoe UI"
