@@ -28,6 +28,7 @@ text ever leave your PC.
 - [System Usage and disk space](#system-usage-and-disk-space)
 - [Default hotkeys](#default-hotkeys)
 - [Install](#install)
+- [Release history](#release-history)
 - [Requirements](#requirements) - [Measured performance](#measured-performance) - [Credits](#credits--third-party-models) - [License](#license)
 
 ## How it works
@@ -227,11 +228,16 @@ Every shortcut can be changed in Settings.
 ## Install
 
 **From a release (recommended).** Download *every* `WispernoPro-Setup-v1.3.0` file from the
-release into **one folder** - the `.exe` and all the numbered `.bin` parts (the installer
-uses disk spanning, so it reads the parts from beside itself) - then run the `.exe`. It upgrades
-an existing Wisperno Pro in place, keeping your settings, history and dictionary. The first
-launch after installing can take about a minute while Windows scans the new files; later
-launches take a few seconds.
+release into **one folder** - the small `.exe` and the three numbered `.bin` parts (about 4.9 GB
+in total; the installer uses disk spanning, so it reads the parts from beside itself) - then run the
+`.exe`. It upgrades an existing Wisperno Pro in place, keeping your settings, history and dictionary,
+and needs about 5 GB of free disk space once installed. The first launch after installing can take
+about a minute while Windows scans the new files; later launches take a few seconds. A
+`SHA256SUMS.txt` is attached to each release if you want to verify the download.
+
+The installer is deliberately small for what it carries: it ships the speech and language models plus
+only the three NVIDIA CUDA libraries the engines actually use (not a whole PyTorch install, which is
+what earlier builds carried - that alone saved about 3 GB).
 
 **From source:**
 
@@ -244,9 +250,18 @@ py -3.12 -m venv .venv
 .venv\Scripts\python main.py
 ```
 
-`requirements.txt` pins `torch`/`torchaudio` 2.6.0 from the CUDA 12.4 index - an unpinned install
-gets a CPU-only build. More detail: [INSTALL.md](INSTALL.md). To regenerate the screenshots in
+`requirements.txt` pins `torch`/`torchaudio` 2.6.0 from the CUDA 12.4 index. The running app never
+imports PyTorch; it is installed only so its CUDA 12 cuBLAS/cudart DLLs can be found (and copied into the
+installer) - an unpinned install gets a CPU-only build without them. More detail: [INSTALL.md](INSTALL.md). To regenerate the screenshots in
 this README (with made-up demo data, never your own history): `python scripts/capture_readme_screenshots.py`.
+
+## Release history
+
+| Version | Highlights |
+|---|---|
+| **1.3.0** | Settings split into nine named tabs, including **Sounds** (seven built-in start/stop sounds with Preview, drag-and-drop your own `.wav`). Long dictation is **split into paragraphs by topic**. System Usage: graphics memory now matches Task Manager, each ring shows Wisperno Pro's own share in orange, and the disk-space card says what can be deleted (history, recordings) and what is the app itself. Profanity filter catches more masking styles (`f**king`, `f#cking`...) and also covers Live Transcription. Cleanup no longer drops "you know" from "letting you know". New orange logo, drawn in code if the file ever fails to load. **Installer 7.9 GB -> 4.9 GB** (no more bundled PyTorch). |
+| 1.1.0 | Dashboard polish (card layouts, hover states, empty states), eight Settings tabs, System Usage with ring gauges and a disk-space breakdown, new logo, soft chime instead of a beep. |
+| 1.0.0 | Compact draggable pill with live waveform, Pill/Box shape and position presets, click-to-dictate, spoken domains, lists across pauses, keep-last-3-recordings with **Re-transcribe**, optional "scratch that" retractions, dark theme from devbhamaria.com. |
 
 ## Requirements
 

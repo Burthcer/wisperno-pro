@@ -66,7 +66,7 @@ def _demo_usage(engine) -> None:
     }
     SystemMonitor.snapshot = lambda self: snapshot
     storage_usage.storage_breakdown = lambda *a, **k: {
-        "app": int(4.9 * GB), "models": int(3.1 * GB), "history": 240 * 1024, "recordings": 6 * 1024 ** 2, "free": 212 * GB,
+        "app": int(1.8 * GB), "models": int(3.0 * GB), "history": 240 * 1024, "recordings": 6 * 1024 ** 2, "free": 212 * GB,
     }
     engine.transcriber = types.SimpleNamespace(config=types.SimpleNamespace(model_name="large-v3-turbo", compute_type="int8_float16"))
     engine.transformer = types.SimpleNamespace(
