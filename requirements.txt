@@ -1,5 +1,8 @@
 --extra-index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+# torch is a BUILD-TIME source only: the app needs just its cuBLAS/cudart DLLs, which wisperno.spec copies into the
+# installer (src/cuda_runtime.py finds them). torch itself is never imported or shipped. Keep it pinned to cu124 so
+# those DLLs are the CUDA 12 ones the engines expect (an unpinned install gets a CPU-only build with no CUDA DLLs).
 torch==2.6.0
 torchaudio==2.6.0
 faster-whisper>=1.0.0

@@ -38,7 +38,7 @@ decade). This override is never written back to `config.yaml`.
 
 ## Disk Space
 
-- ~8.5GB total for the app + all model weights (Whisper + one LLM preset).
+- ~5GB total for the app + model weights (Whisper + one LLM preset): about 1.8GB of program files and 3GB of models.
 - The portable download itself (no models) is a few GB (PyTorch/CUDA/
   CTranslate2 runtime).
 

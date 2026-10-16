@@ -252,7 +252,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 See [SYSTEM_REQUIREMENTS.md](SYSTEM_REQUIREMENTS.md) - short version: Windows
 11 64-bit, an NVIDIA GPU with 4GB+ VRAM (2GB minimum triggers an automatic
-CPU-compatibility fallback), ~8.5GB free disk space.
+CPU-compatibility fallback), ~5GB free disk space (the installed app is about 5GB: 1.8GB of program files + 3GB of AI models).
 
 ## Measured Performance
 

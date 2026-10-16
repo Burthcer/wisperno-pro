@@ -13,17 +13,11 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 from loguru import logger
 
-# Ensure CUDA runtime DLLs are found on Windows
+# Ensure CUDA runtime DLLs are found on Windows (no PyTorch needed - see src/cuda_runtime.py)
 if sys.platform == "win32":
-    try:
-        import torch
-        torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
-        if os.path.exists(torch_lib):
-            if hasattr(os, "add_dll_directory"):
-                os.add_dll_directory(torch_lib)
-            os.environ["PATH"] = torch_lib + os.path.pathsep + os.environ.get("PATH", "")
-    except Exception:
-        pass
+    from src.cuda_runtime import add_cuda_dll_dirs
+
+    add_cuda_dll_dirs()
 
     # llama-cpp-python >=0.3 split its old single llama.dll into separate
     # ggml-base/ggml-cpu/ggml-cuda/ggml/llama/llava DLLs. On this Windows +

@@ -8,7 +8,7 @@ graphics or a VRAM-starved GPU. Keeps that reactive fallback in transcriber.py
 defense, not a replacement for this one.
 """
 
-from typing import TypedDict
+from typing import Tuple, TypedDict
 from loguru import logger
 
 # Below this, treat the GPU as unusable for this app's models even though
@@ -24,6 +24,25 @@ class GpuCapability(TypedDict):
     reason: str
 
 
+def _probe_gpu() -> Tuple[int, float]:
+    """(number of usable CUDA devices, VRAM in GB of the first one). Asks the speech engine itself whether it can
+    see a CUDA device - the same check that decides whether it can actually use the GPU - and NVIDIA's NVML for the
+    memory size. No PyTorch needed."""
+    import ctranslate2
+
+    count = int(ctranslate2.get_cuda_device_count())
+    vram_gb = 0.0
+    if count > 0:
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            vram_gb = pynvml.nvmlDeviceGetMemoryInfo(pynvml.nvmlDeviceGetHandleByIndex(0)).total / (1024 ** 3)
+        except Exception:
+            vram_gb = MIN_VRAM_GB  # the device exists but its size can't be read: give it the benefit of the doubt
+    return count, vram_gb
+
+
 def detect_gpu_capability() -> GpuCapability:
     """Best-effort, exception-safe GPU probe. Never raises - a probe failure
     itself is treated as "no usable GPU", the same as a genuine absence."""
@@ -31,11 +50,8 @@ def detect_gpu_capability() -> GpuCapability:
     vram_gb = 0.0
     reason = ""
     try:
-        import torch
-
-        has_cuda = bool(torch.cuda.is_available() and torch.cuda.device_count() > 0)
-        if has_cuda:
-            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+        count, vram_gb = _probe_gpu()
+        has_cuda = count > 0
     except Exception as e:
         reason = f"GPU probe failed ({e})"
         has_cuda = False

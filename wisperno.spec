@@ -25,7 +25,38 @@ block_cipher = None
 binaries = []
 binaries += collect_dynamic_libs("llama_cpp")
 binaries += collect_dynamic_libs("ctranslate2")
-binaries += collect_dynamic_libs("torch")  # transcriber.py/transformer.py borrow torch's bundled CUDA DLLs (see SKILL.md pitfall 5)
+
+# The engines need three NVIDIA DLLs (cuBLAS, cuBLASLt, cudart) and nothing else from CUDA. They used to arrive by
+# bundling ALL of PyTorch (3.6 GB, ~3 GB of it unused). Now only these three (~550 MB) are copied into _internal/cuda
+# (found at run time by src/cuda_runtime.py). Their source on the build machine is PyTorch's lib folder (installed
+# for this purpose only) or the nvidia-*-cu12 pip packages.
+import importlib.util
+import os
+
+
+def _cuda_runtime_binaries():
+    wanted = ("cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll")
+    folders = []
+    for name, sub in (("torch", "lib"), ("nvidia.cublas", "bin"), ("nvidia.cuda_runtime", "bin")):
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            spec = None
+        if spec and spec.submodule_search_locations:
+            folders.append(os.path.join(list(spec.submodule_search_locations)[0], sub))
+    found = {}
+    for folder in folders:
+        for dll in wanted:
+            path = os.path.join(folder, dll)
+            if dll not in found and os.path.exists(path):
+                found[dll] = path
+    missing = [dll for dll in wanted if dll not in found]
+    if missing:
+        raise SystemExit(f"Build needs {missing} (install the pinned torch from requirements.txt, or nvidia-cublas-cu12 + nvidia-cuda-runtime-cu12).")
+    return [(path, "cuda") for path in found.values()]
+
+
+binaries += _cuda_runtime_binaries()
 
 datas = []
 datas += collect_data_files("faster_whisper")
@@ -84,12 +115,17 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "PyQt5", "PyQt6"],
+    # torch/torchaudio are installed only as a source of the three CUDA DLLs above; never ship them.
+    excludes=["tkinter", "PyQt5", "PyQt6", "torch", "torchaudio", "torchvision"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+
+# PyInstaller also finds those same three DLLs as dependencies of the engines (it searches PATH) and would copy
+# them a second time under torch/lib. They are already in cuda/, so drop the duplicate (547 MB).
+a.binaries = [b for b in a.binaries if not b[0].replace("\\", "/").lower().startswith("torch/")]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

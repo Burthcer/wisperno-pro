@@ -1,7 +1,7 @@
 """
 Integrated Graphics / Legacy GPU Safeguard Verification for Wisperno.
 Directly exercises src/device_manager.py's proactive GPU probe (mocking
-torch.cuda so this runs on any machine regardless of its real hardware) and
+the CUDA probe so this runs on any machine regardless of its real hardware) and
 confirms WispernoEngine actually applies the CPU-fallback override to its
 config when no usable GPU is detected.
 
@@ -22,11 +22,7 @@ def test_detects_real_gpu_when_present() -> None:
     from src.device_manager import detect_gpu_capability
 
     logger.info("--- Testing detect_gpu_capability(): a normal, adequately-VRAM'd GPU is used ---")
-    fake_props = MagicMock()
-    fake_props.total_memory = int(8 * 1024 ** 3)  # 8GB
-    with patch("torch.cuda.is_available", return_value=True), \
-         patch("torch.cuda.device_count", return_value=1), \
-         patch("torch.cuda.get_device_properties", return_value=fake_props):
+    with patch("src.device_manager._probe_gpu", return_value=(1, 8.0)):
         result = detect_gpu_capability()
     assert result["use_gpu"] is True and result["has_cuda"] is True
     assert abs(result["vram_gb"] - 8.0) < 0.01
@@ -37,7 +33,7 @@ def test_falls_back_to_cpu_with_no_cuda() -> None:
     from src.device_manager import detect_gpu_capability
 
     logger.info("--- Testing detect_gpu_capability(): no CUDA device at all -> CPU fallback ---")
-    with patch("torch.cuda.is_available", return_value=False):
+    with patch("src.device_manager._probe_gpu", return_value=(0, 0.0)):
         result = detect_gpu_capability()
     assert result["use_gpu"] is False and result["has_cuda"] is False
     assert result["reason"], "No reason given for the CPU fallback."
@@ -50,11 +46,7 @@ def test_falls_back_to_cpu_with_insufficient_vram() -> None:
     from src.device_manager import detect_gpu_capability, MIN_VRAM_GB
 
     logger.info("--- Testing detect_gpu_capability(): CUDA present but VRAM below the minimum -> CPU fallback ---")
-    fake_props = MagicMock()
-    fake_props.total_memory = int(0.5 * 1024 ** 3)  # 512MB - well under MIN_VRAM_GB
-    with patch("torch.cuda.is_available", return_value=True), \
-         patch("torch.cuda.device_count", return_value=1), \
-         patch("torch.cuda.get_device_properties", return_value=fake_props):
+    with patch("src.device_manager._probe_gpu", return_value=(1, 0.5)):  # 512MB - well under MIN_VRAM_GB
         result = detect_gpu_capability()
     assert result["use_gpu"] is False, f"A {result['vram_gb']:.1f}GB GPU (< {MIN_VRAM_GB}GB) was not rejected."
     assert result["has_cuda"] is True, "has_cuda should still report True - CUDA itself IS present, just not enough VRAM."
@@ -67,7 +59,7 @@ def test_probe_failure_never_raises() -> None:
     from src.device_manager import detect_gpu_capability
 
     logger.info("--- Testing detect_gpu_capability(): a probe exception is swallowed, not raised ---")
-    with patch("torch.cuda.is_available", side_effect=RuntimeError("broken CUDA install")):
+    with patch("src.device_manager._probe_gpu", side_effect=RuntimeError("broken CUDA install")):
         result = detect_gpu_capability()  # must not raise
     assert result["use_gpu"] is False
     logger.success(f"PASS: {result}")

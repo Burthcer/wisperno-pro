@@ -111,19 +111,10 @@ class Transcriber:
         self.model = self._load_model()
 
     def _ensure_cuda_dlls(self) -> None:
-        """
-        Add PyTorch / CUDA runtime DLL directories to Windows DLL search path if on Windows.
-        """
-        if sys.platform == "win32":
-            try:
-                import torch
-                torch_lib_path = os.path.join(os.path.dirname(torch.__file__), "lib")
-                if os.path.exists(torch_lib_path):
-                    if hasattr(os, "add_dll_directory"):
-                        os.add_dll_directory(torch_lib_path)
-                    os.environ["PATH"] = torch_lib_path + os.path.pathsep + os.environ.get("PATH", "")
-            except Exception as e:
-                logger.debug(f"Could not add torch lib to DLL search path: {e}")
+        """Make the CUDA runtime DLLs findable (no PyTorch involved - see src/cuda_runtime.py)."""
+        from src.cuda_runtime import add_cuda_dll_dirs
+
+        add_cuda_dll_dirs()
 
     def _load_model(self) -> WhisperModel:
         """
