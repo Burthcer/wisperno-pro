@@ -52,7 +52,8 @@ Compression=none
 ; not literally one file, but one install experience (double-click the .exe,
 ; the volumes are picked up automatically from beside it).
 DiskSpanning=yes
-DiskSliceSize=max
+; 1.9 GB slices so every part fits GitHub's 2 GB release-asset limit.
+DiskSliceSize=1900000000
 SetupIconFile=..\assets\icons\wisperno.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Matches src/single_instance.py's actual MUTEX_NAME exactly - Setup detects
