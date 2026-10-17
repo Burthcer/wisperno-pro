@@ -104,6 +104,7 @@ def test_history_stores_buffer_duration_not_wall_clock() -> None:
         state_changed = MagicMock()
         result_ready = MagicMock()
         recording_saved = MagicMock()
+        paste_missed = MagicMock()
         finished = MagicMock()
 
     import src.engine as engine_mod

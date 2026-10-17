@@ -154,7 +154,7 @@ def test_engine_applies_the_picked_transform() -> None:
     class FakeWorker:
         def __init__(self, *args, **kwargs):
             captured["args"], captured["kwargs"] = args, kwargs
-            for name in ("state_changed", "result_ready", "recording_saved", "finished"):
+            for name in ("state_changed", "result_ready", "recording_saved", "paste_missed", "finished"):
                 setattr(self, name, mock.MagicMock())
 
         def start(self):
