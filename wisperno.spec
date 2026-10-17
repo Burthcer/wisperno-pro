@@ -70,6 +70,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=[
+        "comtypes", "comtypes.client",  # focus_check.py: UI Automation for the paste-missed card
         "src.config",
         "src.audio_recorder",
         "src.transcriber",

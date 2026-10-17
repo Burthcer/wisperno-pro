@@ -75,6 +75,7 @@ class WispernoEngine(QObject):
     live_transcribe_chunk_received = Signal(str)
     live_transcribe_speculative_changed = Signal(str)  # replaces (never appends) - the current unconfirmed tail
     live_transcribe_session_saved = Signal(dict)  # the finished history row (empty raw = discarded)
+    paste_missed = Signal(str)                     # a dictation had no text box to land in - (text) for the Copy card
     writing_styles_no_selection = Signal()         # Alt+V pressed with nothing highlighted - pill toast only
     writing_styles_selection_ready = Signal(str)   # (original_text) - HUD should appear now
     writing_styles_style_ready = Signal(str, str)  # (style_id, styled_text)
@@ -472,6 +473,7 @@ class WispernoEngine(QObject):
             auto_paragraphs=self.config.auto_paragraphs, trim_rambling=self.config.trim_rambling,
         )
         worker.recording_saved.connect(lambda _id: self.history_added.emit({}))  # History: show Re-transcribe
+        worker.paste_missed.connect(self.paste_missed)
         worker.state_changed.connect(self.state_changed)
         worker.result_ready.connect(self.history_added)
         worker.finished.connect(self._on_inference_finished)
@@ -663,6 +665,7 @@ class WispernoEngine(QObject):
                 auto_paragraphs=self.config.auto_paragraphs, trim_rambling=self.config.trim_rambling,
             )
             worker.recording_saved.connect(lambda _id: self.history_added.emit({}))
+            worker.paste_missed.connect(self.paste_missed)
         else:
             logger.info(f"[TRANSFORM] No speech captured for '{transform_id}' - trying selected text instead.")
             worker = SelectionPolishWorker(

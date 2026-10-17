@@ -108,10 +108,12 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+from PySide6.QtCore import QPoint  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from src.engine import WispernoEngine  # noqa: E402
 from src.ui.floating_pill import FloatingPill  # noqa: E402
+from src.ui.paste_card import PasteCard  # noqa: E402
 from src.ui.live_window import LiveTranscriptionWindow  # noqa: E402
 from src.ui.writing_styles_window import WritingStylesWindow  # noqa: E402
 from src.ui.tray import TrayIcon  # noqa: E402
@@ -161,6 +163,8 @@ class WispernoApp:
         self.writing_styles_window = WritingStylesWindow()
         self.writing_styles_window.style_chosen.connect(self.engine.select_writing_style)
         self.writing_styles_window.dismissed.connect(self.engine.dismiss_writing_styles)
+        self.paste_card = PasteCard()
+        self.engine.paste_missed.connect(self.show_paste_card)
         self.engine.writing_styles_no_selection.connect(lambda: self.pill.set_state("no_selection"))
         self.engine.writing_styles_selection_ready.connect(self.writing_styles_window.show_selection)
         self.engine.writing_styles_style_ready.connect(self.writing_styles_window.set_style_ready)
@@ -264,6 +268,10 @@ class WispernoApp:
     def set_pill_click_action(self, action: str) -> None:
         self.engine.set_pill_click_action(action)
         self.pill.set_click_action(action)
+
+    def show_paste_card(self, text: str) -> None:
+        """A dictation had no text box to land in: offer the text (already copied) above the pill."""
+        self.paste_card.show_for(text, QPoint(self.pill.x() + self.pill.width() // 2, self.pill.y()))
 
     def show_pill_transform_menu(self) -> None:
         """The wand on the hovered pill: pick which Transforms-hub entry runs after dictation."""

@@ -30,6 +30,7 @@ from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
 from src.paragraphing import split_into_paragraphs
+from src.focus_check import has_text_target
 from src.ramble_trim import trim_rambling
 from src.self_correction import apply_self_correction
 from src.swear_filter import apply_profanity_filter
@@ -149,6 +150,7 @@ class InferenceWorker(QThread):
     state_changed = Signal(str)          # 'processing' | 'success' | 'idle'
     result_ready = Signal(dict)          # history row payload, for the History tab
     recording_saved = Signal(int)        # history id whose audio is now kept (History can offer Re-transcribe)
+    paste_missed = Signal(str)           # the text, when no text box had focus (the pill shows a Copy card)
     error = Signal(str)
 
     def __init__(
@@ -263,7 +265,10 @@ class InferenceWorker(QThread):
                     and not self.system_prompt and normalized not in self.snippets):
                 final_text = split_into_paragraphs(final_text)
             add_space = self.trailing_space and wants_trailing_space(style)
+            had_target = has_text_target()  # asked before the paste; the paste still happens either way
             injected = self.injector.inject_text(with_trailing_space(final_text) if add_space else final_text)
+            if injected and not had_target:
+                self.paste_missed.emit(final_text)
             latency_ms = (time.perf_counter() - t0) * 1000
 
             # A Transforms-hub hotkey drove this recording (status_label set) vs
