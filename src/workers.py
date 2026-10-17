@@ -30,6 +30,7 @@ from src.direct_formatter import format_direct, is_short_and_clean
 from src.hotkey_manager import HotkeyManager
 from src.config import AppConfig
 from src.paragraphing import split_into_paragraphs
+from src.ramble_trim import trim_rambling
 from src.self_correction import apply_self_correction
 from src.swear_filter import apply_profanity_filter
 
@@ -155,7 +156,8 @@ class InferenceWorker(QThread):
         mode: str, record_duration_ms: float, system_prompt: Optional[str] = None,
         use_direct_formatter: bool = False, status_label: Optional[str] = None,
         save_recording: bool = False, trailing_space: bool = False, app_styles: Optional[Dict[str, str]] = None,
-        keep_recent: int = 0, self_correction: bool = False, auto_paragraphs: bool = False, parent: Optional[QObject] = None,
+        keep_recent: int = 0, self_correction: bool = False, auto_paragraphs: bool = False, trim_rambling: bool = False,
+        parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.audio_array = audio_array
@@ -190,6 +192,8 @@ class InferenceWorker(QThread):
         self.self_correction = self_correction
         # Settings -> Writing -> topic paragraphs for long dictation (src/paragraphing.py).
         self.auto_paragraphs = auto_paragraphs
+        # Settings -> Writing -> drop spoken padding like "and yeah" (src/ramble_trim.py).
+        self.trim_rambling = trim_rambling
 
     def _emit_final(self, state: str) -> None:
         """The state that ends this dictation ("success" / "idle"). Every way out of run() must send one - a
@@ -221,6 +225,11 @@ class InferenceWorker(QThread):
                         self._emit_final("idle")
                         return
                     raw_text = corrected
+            if self.trim_rambling:
+                trimmed = trim_rambling(raw_text)
+                if trimmed != raw_text:
+                    logger.info(f"[RAMBLE TRIM] '{raw_text}' -> '{trimmed}'")
+                    raw_text = trimmed
 
             # Snippet expansion bypasses formatting entirely when the transcript matches a trigger.
             normalized = raw_text.strip().lower().rstrip(".!? ")

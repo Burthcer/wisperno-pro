@@ -79,7 +79,7 @@ typing into. It stays tiny while idle and grows only when something happens.
 
 ### Choosing a transform from the pill
 
-Click the wand (it has a small arrow) to open the transform menu:
+Click the wand to open the transform menu (the small arrow appears once the mouse is on the wand):
 
 ![The pill's transform menu](docs/images/pill-menu.png)
 
@@ -187,7 +187,7 @@ except **AI Engine**, which has an *Apply changes* button because it reloads the
 |---|---|
 | **Microphone** | Input device, a 3-second mic test with a live level meter, and auto-stop after a pause |
 | **Shortcuts** | Tap-to-toggle and hold-to-talk keys (click a box, press the keys you want) |
-| **Writing** | Smart cleanup, automatic paragraphs for long dictation, copy to clipboard, trailing space, the profanity filter, and "scratch that" retractions |
+| **Writing** | Smart cleanup, automatic paragraphs for long dictation, copy to clipboard, trailing space, the profanity filter, "scratch that" retractions, and cutting spoken padding ("and yeah", "so yeah") |
 | **Pill** | Show/hide, always on top, what a click does, shape (Pill or Box), position presets and Reset |
 | **Sounds** | Optional start/stop sounds: seven built-in ones with a Preview button, or drag in your own .wav |
 | **App Styles** | Per-app punctuation rules (chat apps, code editors...), with your own apps added |
@@ -241,7 +241,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.3.0` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.4.0` file from the
 release into **one folder** - the small `.exe` and the three numbered `.bin` parts (about 4.9 GB
 in total; the installer uses disk spanning, so it reads the parts from beside itself) - then run the
 `.exe`. It upgrades an existing Wisperno Pro in place, keeping your settings, history and dictionary,
@@ -273,6 +273,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 | Version | Highlights |
 |---|---|
+| **1.4.0** | The pill's transform arrow now appears only when the mouse is on the wand button, and the mic and wand buttons sit a little further apart. New **"Cut spoken padding"** setting (on by default) drops empty phrases such as "and yeah", "so yeah" and ", I guess," - never answers or opinions - while History keeps the untouched text. |
 | **1.3.0** | Hover the pill for a **mic button and a transform menu** (pick Polish / Prompt Engineer / ... with the mouse, with an Auto Apply switch). Fixed the pill sometimes sticking on "processing" after the tick.  Settings split into nine named tabs, including **Sounds** (seven built-in start/stop sounds with Preview, drag-and-drop your own `.wav`). Long dictation is **split into paragraphs by topic**. System Usage: graphics memory now matches Task Manager, each ring shows Wisperno Pro's own share in orange, and the disk-space card says what can be deleted (history, recordings) and what is the app itself. Profanity filter catches more masking styles (`f**king`, `f#cking`...) and also covers Live Transcription. Cleanup no longer drops "you know" from "letting you know". New orange logo, drawn in code if the file ever fails to load. **Installer 7.9 GB -> 4.9 GB** (no more bundled PyTorch). |
 | 1.1.0 | Dashboard polish (card layouts, hover states, empty states), eight Settings tabs, System Usage with ring gauges and a disk-space breakdown, new logo, soft chime instead of a beep. |
 | 1.0.0 | Compact draggable pill with live waveform, Pill/Box shape and position presets, click-to-dictate, spoken domains, lists across pauses, keep-last-3-recordings with **Re-transcribe**, optional "scratch that" retractions, dark theme from devbhamaria.com. |
@@ -388,7 +389,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.3.0. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.4.0. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

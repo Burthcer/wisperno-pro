@@ -69,7 +69,7 @@ PRESET_MARGIN = 24
 
 PILL_H = 30                  # height while something is happening
 IDLE_W, IDLE_H = 46, 14      # at rest
-HOVER_W, HOVER_H = 80, 30    # under the cursor: grows to show the mic and transform buttons
+HOVER_W, HOVER_H = 84, 30    # under the cursor: grows to show the mic and transform buttons
 ACTIVE_W = 156               # [x] waveform [check]
 BUSY_W = 72                  # dots only
 SUCCESS_W = 60
@@ -486,8 +486,9 @@ class FloatingPill(QWidget):
         d = h - 2.0 * EDGE_PAD
         cy = h / 2.0
         self._mic_rect = QRectF(EDGE_PAD, cy - d / 2.0, d, d)
-        wand_w = w - EDGE_PAD * 2 - d - 6.0
-        self._wand_rect = QRectF(self._mic_rect.right() + 6.0, cy - d / 2.0, wand_w, d)
+        gap = 12.0  # air between the mic and wand buttons
+        wand_w = w - EDGE_PAD * 2 - d - gap
+        self._wand_rect = QRectF(self._mic_rect.right() + gap, cy - d / 2.0, wand_w, d)
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if self._hover_mic else theme.PILL_BUTTON))
@@ -498,9 +499,12 @@ class FloatingPill(QWidget):
         painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if (self._hover_wand or self._menu_open) else theme.PILL_BUTTON))
         painter.drawRoundedRect(self._wand_rect, d / 2.0, d / 2.0)
         glyph_color = theme.PILL_TEXT_PRIMARY if (self._hover_wand or self._menu_open) else theme.PILL_TEXT
-        wand_icon = QRectF(self._wand_rect.left() + 3.0, self._wand_rect.top(), d, d)
-        self._paint_wand_glyph(painter, wand_icon, glyph_color)
-        self._paint_chevron(painter, QPointF(self._wand_rect.right() - 11.0, cy), glyph_color)
+        # The arrow only appears once the mouse is on the wand (or its menu is open); until then the wand sits centred.
+        show_chevron = self._hover_wand or self._menu_open
+        icon_left = self._wand_rect.left() + 3.0 if show_chevron else self._wand_rect.center().x() - d / 2.0
+        self._paint_wand_glyph(painter, QRectF(icon_left, self._wand_rect.top(), d, d), glyph_color)
+        if show_chevron:
+            self._paint_chevron(painter, QPointF(self._wand_rect.right() - 11.0, cy), glyph_color)
 
     @staticmethod
     def _paint_mic_glyph(painter: QPainter, rect: QRectF, color: str) -> None:

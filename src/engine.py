@@ -469,7 +469,7 @@ class WispernoEngine(QObject):
             trailing_space=self.config.injector.trailing_space,
             app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
             keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
-            auto_paragraphs=self.config.auto_paragraphs,
+            auto_paragraphs=self.config.auto_paragraphs, trim_rambling=self.config.trim_rambling,
         )
         worker.recording_saved.connect(lambda _id: self.history_added.emit({}))  # History: show Re-transcribe
         worker.state_changed.connect(self.state_changed)
@@ -514,6 +514,10 @@ class WispernoEngine(QObject):
         self.config.keep_recent_recordings = int(count)
         self.save_config()
         recent_audio.prune(int(count))  # lowering the number deletes the extra clips now
+
+    def set_trim_rambling(self, enabled: bool) -> None:
+        self.config.trim_rambling = enabled
+        self.save_config()
 
     def set_auto_paragraphs(self, enabled: bool) -> None:
         self.config.auto_paragraphs = enabled
@@ -656,7 +660,7 @@ class WispernoEngine(QObject):
                 trailing_space=self.config.injector.trailing_space,
                 app_styles=self.config.app_styles if self.config.app_styles_enabled else None,
                 keep_recent=self.config.keep_recent_recordings, self_correction=self.config.self_correction,
-                auto_paragraphs=self.config.auto_paragraphs,
+                auto_paragraphs=self.config.auto_paragraphs, trim_rambling=self.config.trim_rambling,
             )
             worker.recording_saved.connect(lambda _id: self.history_added.emit({}))
         else:

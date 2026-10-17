@@ -240,6 +240,11 @@ class AppConfig(BaseModel):
         description="'Auto Apply After Dictation' in the pill's wand menu: run the picked transform on every dictation. "
                     "Off = dictation gets the normal cleanup only.",
     )
+    trim_rambling: bool = Field(
+        default=True,
+        description="Drop spoken padding like \"and yeah\", \"so yeah\", \", I guess,\" (src/ramble_trim.py). Narrow phrase list; "
+                    "never removes answers or opinions, and gives the text back untouched if it would cut over 40% of it.",
+    )
     auto_paragraphs: bool = Field(
         default=True,
         description="Split a long dictation into paragraphs where the topic changes (src/paragraphing.py). "

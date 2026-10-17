@@ -473,6 +473,14 @@ class _GeneralSettings(QWidget):
         self.auto_llm_polish_cb.stateChanged.connect(lambda s: engine.set_auto_llm_polish(s != 0))
         v.addWidget(_check_row(self.auto_llm_polish_cb, "Removes filler words, fixes \"wait no\" corrections and formats lists. "
                                                         "Short, clean phrases stay instant. Turn off for rule-based formatting only."))
+        self.trim_rambling_cb = QCheckBox("Cut spoken padding (\"and yeah\", \"so yeah\", \"I guess,\")")
+        self.trim_rambling_cb.setChecked(engine.config.trim_rambling)
+        self.trim_rambling_cb.stateChanged.connect(lambda s: engine.set_trim_rambling(s != 0))
+        v.addWidget(_check_row(
+            self.trim_rambling_cb,
+            "Drops a short list of empty phrases such as \"and yeah\", \"so yeah\" and \"..., I guess,\". Real answers and opinions "
+            "(\"yeah, I can do that\", \"I guess it works\") are never touched. The untouched text stays in History.",
+        ))
         self.auto_paragraphs_cb = QCheckBox("Split long dictation into paragraphs")
         self.auto_paragraphs_cb.setChecked(engine.config.auto_paragraphs)
         self.auto_paragraphs_cb.stateChanged.connect(lambda s: engine.set_auto_paragraphs(s != 0))
