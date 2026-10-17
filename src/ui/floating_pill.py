@@ -68,9 +68,9 @@ POSITION_PRESETS = {
 PRESET_MARGIN = 24
 
 PILL_H = 30                  # height while something is happening
-IDLE_W, IDLE_H = 46, 14      # at rest
-HOVER_W, HOVER_H = 60, 30    # under the cursor: two equal round buttons (mic, transform wand)
-WAND_EXTRA = 22              # the wand button slides open this much to show its arrow while the mouse is on it
+IDLE_W, IDLE_H = 54, 14      # at rest
+HOVER_W, HOVER_H = 72, 36    # under the cursor: two equal round buttons (mic, transform wand)
+WAND_EXTRA = 24              # the wand button slides open this much to show its arrow while the mouse is on it
 ACTIVE_W = 156               # [x] waveform [check]
 BUSY_W = 72                  # dots only
 SUCCESS_W = 60
