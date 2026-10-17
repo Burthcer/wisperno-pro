@@ -110,7 +110,7 @@ def test_pill_popup_keeps_itself_expanded_and_collapses_after() -> None:
     pill._hover = False  # the mouse moved onto the menu
     pill._apply_size_targets()
     from src.ui import floating_pill as fp
-    assert pill._width_target == fp.HOVER_W, "stays expanded under its own menu"
+    assert pill._width_target == fp.HOVER_W + fp.WAND_EXTRA, "stays expanded (wand open) under its own menu"
     pill._on_menu_closed()
     assert not pill._menu_open and pill._width_target == fp.IDLE_W
     pill.close()

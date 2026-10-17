@@ -69,7 +69,8 @@ PRESET_MARGIN = 24
 
 PILL_H = 30                  # height while something is happening
 IDLE_W, IDLE_H = 46, 14      # at rest
-HOVER_W, HOVER_H = 84, 30    # under the cursor: grows to show the mic and transform buttons
+HOVER_W, HOVER_H = 60, 30    # under the cursor: two equal round buttons (mic, transform wand)
+WAND_EXTRA = 22              # the wand button slides open this much to show its arrow while the mouse is on it
 ACTIVE_W = 156               # [x] waveform [check]
 BUSY_W = 72                  # dots only
 SUCCESS_W = 60
@@ -273,7 +274,9 @@ class FloatingPill(QWidget):
         state = self.state
         if state in (STATE_IDLE, STATE_LOADING):
             expanded = state == STATE_IDLE and (self._hover or self._menu_open)
-            self._width_target, self._height_target = (HOVER_W, HOVER_H) if expanded else (IDLE_W, IDLE_H)
+            wand_open = expanded and (self._hover_wand or self._menu_open)
+            self._width_target, self._height_target = (
+                (HOVER_W + (WAND_EXTRA if wand_open else 0), HOVER_H) if expanded else (IDLE_W, IDLE_H))
         elif state in (STATE_RECORDING, STATE_MIC_STARTING):
             self._width_target, self._height_target = ACTIVE_W, PILL_H
         elif state in (STATE_PROCESSING, STATE_SELECTION_PROCESSING):
@@ -486,7 +489,7 @@ class FloatingPill(QWidget):
         d = h - 2.0 * EDGE_PAD
         cy = h / 2.0
         self._mic_rect = QRectF(EDGE_PAD, cy - d / 2.0, d, d)
-        gap = 12.0  # air between the mic and wand buttons
+        gap = 10.0  # air between the mic and wand buttons
         wand_w = w - EDGE_PAD * 2 - d - gap
         self._wand_rect = QRectF(self._mic_rect.right() + gap, cy - d / 2.0, wand_w, d)
 
@@ -500,7 +503,7 @@ class FloatingPill(QWidget):
         painter.drawRoundedRect(self._wand_rect, d / 2.0, d / 2.0)
         glyph_color = theme.PILL_TEXT_PRIMARY if (self._hover_wand or self._menu_open) else theme.PILL_TEXT
         # The arrow only appears once the mouse is on the wand (or its menu is open); until then the wand sits centred.
-        show_chevron = self._hover_wand or self._menu_open
+        show_chevron = (self._hover_wand or self._menu_open) and self._wand_rect.width() > d + 8.0
         icon_left = self._wand_rect.left() + 3.0 if show_chevron else self._wand_rect.center().x() - d / 2.0
         self._paint_wand_glyph(painter, QRectF(icon_left, self._wand_rect.top(), d, d), glyph_color)
         if show_chevron:
@@ -677,6 +680,7 @@ class FloatingPill(QWidget):
         if (hover_cancel, hover_finish, hover_mic, hover_wand) != (self._hover_cancel, self._hover_finish, self._hover_mic, self._hover_wand):
             self._hover_cancel, self._hover_finish = hover_cancel, hover_finish
             self._hover_mic, self._hover_wand = hover_mic, hover_wand
+            self._apply_size_targets()  # the wand opens (and closes) as the mouse moves on/off it
             self.update()
         if hover_mic or hover_wand:
             self.setToolTip(f"Start dictating  ({self.hotkey_label})" if hover_mic else "Choose a transform")
