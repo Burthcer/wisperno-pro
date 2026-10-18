@@ -105,8 +105,8 @@ def test_bug_fix_rules_kept() -> None:
     logger.success("PASS: transparent labels and objectName-scoped cards kept.")
 
 
-def test_palette_is_devbhamaria_com() -> None:
-    logger.info("--- Testing the palette is the one from devbhamaria.com ---")
+def test_palette_is_the_website_palette() -> None:
+    logger.info("--- Testing the palette is the project website's ---")
     # --bg/--bg2/--bg3/--ink/--ink2/--hair/--acc from the site's portfolio3d.css.
     assert (theme.BG_APP, theme.BG_CARD, theme.BG_CARD_HOVER) == ("#0C0C0B", "#151513", "#1E1D1B")
     assert (theme.TEXT_PRIMARY, theme.TEXT_SECONDARY, theme.BORDER_SUBTLE) == ("#ECEBE6", "#AAA79E", "#2A2926")
@@ -136,7 +136,7 @@ def test_site_fonts_are_bundled_and_load() -> None:
 
 def run_all_tests() -> None:
     test_palette_is_dark()
-    test_palette_is_devbhamaria_com()
+    test_palette_is_the_website_palette()
     test_site_fonts_are_bundled_and_load()
     test_text_contrast()
     test_no_hard_coded_colours_outside_theme()

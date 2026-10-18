@@ -14,6 +14,7 @@ Whole-GPU total/used still comes from pynvml, which IS accurate at that level.
 import ctypes as ct
 import os
 import sys
+import time
 from typing import List, Optional, Tuple
 
 from loguru import logger
@@ -232,6 +233,23 @@ class SystemMonitor:
         self._mismatch_logged = False
         self._first_reading_logged = False
         self._low_used_logged = False
+        self._ram_read_at = 0.0
+        self._ram_cached_mb = None
+
+    def _app_ram_mb(self) -> float:
+        """The app's OWN memory, as Task Manager counts it: private memory, not the working set. The working set (RSS)
+        also counts the model files that are memory-mapped (about 3 GB for Whisper + the language model); Windows can
+        drop those pages at any time and other programs share them, so RSS showed ~5.8 GB while the private cost was
+        ~1 GB. Refreshed every 4 s - reading it walks the process's pages."""
+        now = time.monotonic()
+        if now - self._ram_read_at >= 4.0 or self._ram_cached_mb is None:
+            proc = psutil.Process(self._pid)
+            try:
+                self._ram_cached_mb = proc.memory_full_info().uss / 1024 / 1024
+            except Exception:
+                self._ram_cached_mb = proc.memory_info().rss / 1024 / 1024
+            self._ram_read_at = now
+        return self._ram_cached_mb
 
     def _read_gpu_memory(self) -> tuple:
         """(total_mb, used_mb) of the whole GPU. NVML sometimes answers 0 / an error on a laptop GPU that was idle, so a
@@ -270,7 +288,7 @@ class SystemMonitor:
     def snapshot(self) -> dict:
         """Returns MB-denominated gpu_total/gpu_used/app_vram and ram_total/ram_used/app_ram."""
         ram = psutil.virtual_memory()
-        app_ram_mb = psutil.Process(self._pid).memory_info().rss / 1024 / 1024
+        app_ram_mb = self._app_ram_mb()
 
         gpu_total_mb, gpu_used_mb = self._read_gpu_memory()
 

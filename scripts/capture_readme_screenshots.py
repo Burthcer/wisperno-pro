@@ -30,7 +30,7 @@ DEMO_HISTORY = [
     ("Refactor the settings page so each option explains what it does.", "refactor the settings page so each option explains what it does", "polish", 3.9, 690),
 ]
 DEMO_WORDS = [("kubernetes", "Kubernetes", "Jargon"), ("pie torch", "PyTorch", "Jargon"), ("wisperno", "Wisperno", "Name"), ("g p u", "GPU", "Jargon")]
-DEMO_SNIPPETS = [("my email", "hello@example.com"), ("sign off", "Best regards,\nDev"), ("standup", "Yesterday: shipped the installer. Today: testing. Blockers: none.")]
+DEMO_SNIPPETS = [("my email", "hello@example.com"), ("sign off", "Best regards,\nJane"), ("standup", "Yesterday: shipped the installer. Today: testing. Blockers: none.")]
 
 
 def _seed(engine) -> None:
@@ -280,9 +280,105 @@ def paste_card_shot() -> None:
     print("saved paste-card.png")
 
 
+def extra_window_shots() -> None:
+    """Transform editor, Live Transcription window and the pill's three hover states (demo text only)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+    from src.ui.floating_pill import FloatingPill
+    from src.ui.live_window import LiveTranscriptionWindow
+    from test_ui_layout import _build_main_window
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    from PySide6.QtGui import QFont
+    for family in ("Inter Tight", "Segoe UI Variable Text", "Segoe UI"):  # the offscreen backend has no emoji fallback of its own
+        QFont.insertSubstitutions(family, ["Segoe UI Emoji"])
+
+    # --- Transform editor (the Polite tone, with its prompt)
+    with mock.patch("src.recent_audio.has_audio", return_value=True):
+        app, win, engine = _build_main_window()
+        win.resize(1280, 860)
+        win.setStyleSheet(theme.MAIN_WINDOW_QSS)
+        _goto(win, win.transforms_tab)
+        win.transforms_tab._open_editor("tone_polite")
+        win.transforms_tab.editor.test_input.setPlainText("hey can you send me the report by tomorrow i need it for the meeting")
+        win.transforms_tab.editor.test_output.setPlainText("Could you please send me the report by tomorrow? I need it for the meeting.")
+        QTest.qWait(600)
+        _save(win, "transforms-editor.png")
+        win.close()
+
+    # --- Live Transcription window
+    live = LiveTranscriptionWindow()
+    live.append_chunk("Welcome everyone, thanks for joining the call. ")
+    live.append_chunk("Today we will walk through the release plan and the open questions from last week. ")
+    live.set_speculative_text("First, the installer is ready for")
+    live.show()
+    QTest.qWait(400)
+    _save(live, "live-transcription.png")
+    live.close()
+
+    # --- The pill when hovered: resting strip, mic + wand, wand open (arrow shown)
+    def pill_image(hover: bool, wand: bool):
+        pill = FloatingPill()
+        pill.set_state("idle")
+        pill._hover, pill._hover_wand = hover, wand
+        pill._apply_size_targets()
+        pill._width_current, pill._height_current = pill._width_target, pill._height_target
+        pill.resize(int(pill._width_current), int(pill._height_current))
+        QTest.qWait(60)
+        img = pill.grab().scaled(pill.width() * 3, pill.height() * 3, Qt.AspectRatioMode.KeepAspectRatio,
+                                 Qt.TransformationMode.SmoothTransformation)
+        pill.close()
+        return img
+
+    images = [pill_image(False, False), pill_image(True, False), pill_image(True, True)]
+    pad = 26
+    sheet = QPixmap(sum(i.width() for i in images) + pad * 4, max(i.height() for i in images) + pad * 2)
+    sheet.fill(QColor(theme.BG_APP))
+    q = QPainter(sheet)
+    x = pad
+    for img in images:
+        q.drawPixmap(x, (sheet.height() - img.height()) // 2, img)
+        x += img.width() + pad
+    q.end()
+    sheet.save(str(OUT / "pill-hover.png"))
+    print("saved pill-hover.png")
+
+
+def hero_image() -> None:
+    """The README header picture: the dashboard with the pill and the paste card laid over it."""
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+    from src.ui import theme
+
+    dash = QPixmap(str(OUT / "history.png"))
+    pill = QPixmap(str(OUT / "pill-hover.png"))
+    card = QPixmap(str(OUT / "paste-card.png"))
+    card = card.copy(24, 24, 372, 218)  # exactly the card (before Copy), without the sheet's background
+    w, h = dash.width() + 80, dash.height() + 80
+    canvas = QPixmap(w, h)
+    canvas.fill(QColor(theme.BG_APP))
+    q = QPainter(canvas)
+    q.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    q.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    q.drawPixmap(40, 40, dash)
+    pill_small = pill.scaledToWidth(int(w * 0.34), Qt.TransformationMode.SmoothTransformation)
+    q.drawPixmap(w - pill_small.width() - 60, h - pill_small.height() - 40, pill_small)
+    card_small = card.scaledToWidth(int(w * 0.30), Qt.TransformationMode.SmoothTransformation)
+    q.drawPixmap(w - card_small.width() - 60, h - pill_small.height() - card_small.height() - 56, card_small)
+    q.end()
+    canvas.save(str(OUT / "hero.png"))
+    print("saved hero.png")
+
+
 if __name__ == "__main__":
     pill_shots()
     paste_card_shot()
     pill_menu_shot()
     position_preset_diagram()
     dashboard_shots()
+    extra_window_shots()
+    hero_image()

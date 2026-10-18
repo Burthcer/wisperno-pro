@@ -34,6 +34,7 @@ def test_vram_floor() -> None:
     monitor._pid = os.getpid()
     monitor._gpu_handle = object()
     monitor._mismatch_logged = monitor._first_reading_logged = monitor._low_used_logged = False
+    monitor._ram_read_at, monitor._ram_cached_mb = 0.0, None
     monitor._proc_vram = types.SimpleNamespace(read=lambda pid: (3200.0, 90.0, []))
     # NVML claims the whole GPU uses 0 MB, although this app alone holds 3.2 GB
     monitor._read_gpu_memory = lambda: (8188.0, 0.0)

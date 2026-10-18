@@ -200,7 +200,7 @@ class AppConfig(BaseModel):
     dashboard_hotkey: str = Field(default="ctrl+shift+h", description="Hotkey to toggle the full desktop dashboard window")
     live_transcribe_hotkey: str = Field(default="ctrl+shift+l", description="Hotkey to start/stop a Live Transcription session")
     writing_styles_hotkey: str = Field(default="alt+v", description="Hotkey to open the Writing Styles HUD on the current text selection")
-    minimize_to_tray: bool = Field(default=True, description="Closing the dashboard/pill minimizes to tray instead of quitting")
+    minimize_to_tray: bool = Field(default=False, description="Closing the dashboard/pill minimizes to tray instead of quitting")
     pill_always_on_top: bool = Field(default=True, description="Keep the floating pill above other windows, including fullscreen apps/games")
     pill_click_action: str = Field(
         default="dictate",

@@ -5,7 +5,7 @@ Draws the Wisperno Pro logo and writes every icon file the app and installer use
   assets/icons/wisperno.png, assets/icons/wisperno.ico   (what the app, tray and installer load)
 
 The mark is the pill's live waveform in the site's near-black, on an orange
-rounded tile (devbhamaria.com palette: #FF5714 / #0C0C0B).
+rounded tile (the project website palette: #FF5714 / #0C0C0B).
 
 Run: python scripts/make_icon.py
 """

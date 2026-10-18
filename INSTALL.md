@@ -32,7 +32,7 @@ want a standalone portable folder like the one this project ships day-to-day.
 ## 2. Run from source
 
 ```
-git clone https://github.com/Burthcer/wisperno-pro.git
+git clone https://github.com/<your-account>/wisperno-pro.git
 cd wisperno-pro
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt

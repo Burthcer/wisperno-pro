@@ -28,10 +28,10 @@ SPOKEN = [
     ("I posted it on dev dot to.", "I posted it on dev.to."),
     ("www dot google dot com is huge", "www.google.com is huge."),
     ("open dev dot io and then go to settings", "Open dev.io and then go to settings."),
-    ("visit dev dot to slash burthcer", "Visit dev.to/burthcer."),
-    ("visit dev dot to slash burthcer slash posts", "Visit dev.to/burthcer/posts."),
-    ("my site is devbhamaria dot com and github dot com slash burthcer",
-     "My site is devbhamaria.com and github.com/burthcer."),
+    ("visit dev dot to slash janedoe", "Visit dev.to/janedoe."),
+    ("visit dev dot to slash janedoe slash posts", "Visit dev.to/janedoe/posts."),
+    ("my site is examplesite dot com and github dot com slash janedoe",
+     "My site is examplesite.com and github.com/janedoe."),
     ("Dev dot to and Hacker News", "Dev.to and Hacker News."),
     ("my-site dot org", "my-site.org."),
 ]
@@ -50,7 +50,7 @@ LITERAL = [  # what Whisper writes when it already got it right
     ("I posted it on dev.to.", "I posted it on dev.to."),
     ("go to www.example.co.uk/page now", "Go to www.example.co.uk/page now."),
     ("the file is main.py and README.md", "The file is main.py and README.md."),
-    ("email me at dev.bhamaria@gmail.com", "Email me at dev.bhamaria@gmail.com."),
+    ("email me at jane@example.com", "Email me at jane@example.com."),
     ("this is one sentence.here comes another", "This is one sentence. Here comes another."),
     ("hello.how are you?wait,really", "Hello. How are you? Wait, really."),
     ("the value is 3.14 and there were 1,234 attendees", "The value is 3.14 and there were 1,234 attendees."),
@@ -101,9 +101,9 @@ def test_llm_is_handed_the_domain() -> None:
 
     t.llm = mock.Mock()
     t.llm.create_chat_completion.side_effect = complete
-    out = t.transform("so I posted the write up on dev dot to slash burthcer yesterday", mode="polish")
-    assert "dev.to/burthcer" in handed[0], handed
-    assert "dev.to/burthcer" in out and " dot " not in out, out
+    out = t.transform("so I posted the write up on dev dot to slash janedoe yesterday", mode="polish")
+    assert "dev.to/janedoe" in handed[0], handed
+    assert "dev.to/janedoe" in out and " dot " not in out, out
     logger.success(f"PASS: model handed {handed[0]!r}")
 
 

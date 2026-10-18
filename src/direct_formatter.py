@@ -139,7 +139,7 @@ def _spoken_domain(match: "re.Match") -> str:
 
 def apply_spoken_domains(text: str) -> str:
     """"dev dot to" -> "dev.to", "www dot google dot com" -> "www.google.com",
-    "dev dot to slash burthcer" -> "dev.to/burthcer". Only when the last part is
+    "dev dot to slash janedoe" -> "dev.to/janedoe". Only when the last part is
     a real top-level domain, so "polka dot" and "dot product" stay words."""
     text = _SPOKEN_DOMAIN_RE.sub(_spoken_domain, text)
     previous = None

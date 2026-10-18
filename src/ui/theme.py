@@ -52,7 +52,7 @@ def get_app_icon() -> QIcon:
     return fallback_icon()
 
 # --- Floating pill ------------------------------------------------------
-# Same warm near-black as the dashboard (and devbhamaria.com); it floats over
+# Same warm near-black as the dashboard (and the project website); it floats over
 # whatever app you're typing in, so it stays opaque-ish and hairline-bordered.
 PILL_BG = "#0C0C0B"
 PILL_BG_ALPHA = 0.94
@@ -82,7 +82,7 @@ ACCENT_SUCCESS = "#5FD38D"         # injected
 ACCENT_ERROR = "#F5C542"           # yellow - init taking abnormally long / failed
 
 # --- Main dashboard ---------------------------------------------------------
-# Taken from devbhamaria.com: warm near-black canvas (#0c0c0b / #151513 /
+# Taken from the project website: warm near-black canvas (#0c0c0b / #151513 /
 # #1e1d1b), warm off-white ink, hairline #2a2926 borders and ONE orange accent
 # (#ff5714) whose fills carry dark text. Contrast of every text/background pair
 # is checked in tests/test_ui_theme.py.
