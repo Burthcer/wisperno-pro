@@ -59,6 +59,10 @@ def test_detection_rules() -> None:
     assert is_text_target(50000, False, False) is False, "Button"
     assert is_text_target(50008, False, False) is False, "List"
     assert is_text_target(50033, False, False, "explorer.exe") is False, "the desktop / taskbar"
+    # measured in Edge: a focused <input> vs a page body (read-only value = the address)
+    assert is_text_target(50004, True, True, "msedge.exe", value_read_only=False) is True, "web input"
+    assert is_text_target(50030, True, True, "msedge.exe", value_read_only=True) is False, "page with nothing focused"
+    assert is_text_target(50030, True, False, "winword.exe") is True, "a Word document (no value pattern)"
     logger.success("PASS: only definite non-text elements raise the card.")
 
 

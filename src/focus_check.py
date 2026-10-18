@@ -36,13 +36,21 @@ _NEVER_TEXT = {
     50038,  # Separator
 }
 _PANE, _WINDOW = 50033, 50032
+_EDITABLE = {50003, 50004}  # ComboBox, Edit: always a place to type
 # A bare pane / window only counts as "no text box" in the desktop shell (explorer.exe: the desktop, the taskbar, a
 # folder). In other programs a pane can be a terminal or a custom editor, so it stays "text box".
 _SHELL_PROCESSES = {"explorer.exe", "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe"}
 
 
-def is_text_target(control_type: int, has_text_pattern: bool, has_value_pattern: bool, process: str = "") -> bool:
-    """Pure decision (testable): can the focused element receive typed text?"""
+def is_text_target(control_type: int, has_text_pattern: bool, has_value_pattern: bool, process: str = "",
+                   value_read_only: bool = False) -> bool:
+    """Pure decision (testable): can the focused element receive typed text?
+    Measured in Edge: a focused <input> is an Edit with a writable value; a page with nothing focused is a Document
+    whose value (the address) is READ-ONLY - that is the "no text box" case inside browsers and Electron apps."""
+    if control_type in _EDITABLE:
+        return True
+    if has_value_pattern and value_read_only:
+        return False
     if has_text_pattern or has_value_pattern:
         return True
     if control_type in _NEVER_TEXT:
@@ -76,9 +84,15 @@ def _inspect_focus() -> bool:
             process = psutil.Process(element.CurrentProcessId).name()
         except Exception:
             process = ""
-    result = is_text_target(kind, has(_TEXT_PATTERN), has(_VALUE_PATTERN), process)
-    if not result:
-        logger.info(f"[PASTE CHECK] focused element (type {kind}, process '{process or '?'}') is not a text box.")
+    value_read_only = False
+    if has(_VALUE_PATTERN):
+        try:
+            value_read_only = bool(element.GetCurrentPattern(_VALUE_PATTERN).QueryInterface(U.IUIAutomationValuePattern).CurrentIsReadOnly)
+        except Exception:
+            value_read_only = False
+    result = is_text_target(kind, has(_TEXT_PATTERN), has(_VALUE_PATTERN), process, value_read_only)
+    logger.debug(f"[PASTE CHECK] focused type {kind}, value read-only={value_read_only}, process '{process or '?'}' -> "
+                 f"{'text box' if result else 'NOT a text box'}")
     return result
 
 

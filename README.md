@@ -241,7 +241,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.5.1` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.5.2` file from the
 release into **one folder** - the small `.exe` and the three numbered `.bin` parts (about 4.9 GB
 in total; the installer uses disk spanning, so it reads the parts from beside itself) - then run the
 `.exe`. It upgrades an existing Wisperno Pro in place, keeping your settings, history and dictionary,
@@ -273,6 +273,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 | Version | Highlights |
 |---|---|
+| **1.5.2** | The "no text field" card now works inside **browsers and Electron apps**: a page with nothing focused (read-only document) raises the card, a focused input does not (measured against real Edge pages). |
 | **1.5.1** | Launching the app again (double-clicking its icon while it is already running in the tray) now **opens the dashboard** instead of only flashing the pill. Diagnostics for the "no text field" check (`WispernoPro.exe --probe-focus`). |
 | **1.5.0** | **Sounds fixed**: Windows can remember a program's volume as 0 in the volume mixer, which made every cue silent; Wisperno now restores its own volume. Four **tone transforms** (Polite, Professional, Casual, Concise), spoken lists like "Question 1... Question 2..." come out as a numbered list with proper `?` marks, and the clipped Transforms text boxes are fixed. History, Snippets, Dictionary and Transforms use real **icon buttons** (star, pin, copy, edit, trash, retry) with a green "Copied!" confirmation. Redesigned **"No active text field detected" card** (status dot, preview, orange Copy button, round close button) with stricter detection so it no longer pops up over editors and chat boxes. The mic button on the hovered pill is a wide capsule. Installer builds now delete all but the newest two versions. |
 | **1.4.0** | Bigger, equal round **mic and wand buttons** on the hovered pill (the wand slides open to show its arrow only while the mouse is on it) and a slightly longer resting strip. New **"no text box" card**: if a dictation has nowhere to land, a card above the pill shows the text with **Copy** and **Dismiss** buttons (nothing is copied unless you press Copy). New **"Cut spoken padding"** setting (on by default) drops empty phrases such as "and yeah", "so yeah" and ", I guess," - never answers or opinions - while History keeps the untouched text. |
@@ -391,7 +392,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.5.1. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.5.2. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

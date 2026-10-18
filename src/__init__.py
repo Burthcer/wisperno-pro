@@ -10,4 +10,4 @@ from src.cuda_runtime import add_cuda_dll_dirs
 
 add_cuda_dll_dirs()
 
-__version__ = "1.5.1"
+__version__ = "1.5.2"

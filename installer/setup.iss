@@ -5,7 +5,7 @@
 ; which passes /DMyAppVersion=<version> read from src/__version__.py - never hardcode
 ; a version here, it would drift out of sync with the actual build.
 #ifndef MyAppVersion
-  #define MyAppVersion "1.5.1"
+  #define MyAppVersion "1.5.2"
 #endif
 #define MyAppName "Wisperno Pro"
 #define MyAppPublisher "Wisperno Pro"
