@@ -134,6 +134,55 @@ _POLISH_LIST_RULES = (
     "3. Nobody owns the pipeline."
 )
 
+
+# Tone transforms (like Galaxy AI's writing assist): rewrite the dictation in a different register, same meaning.
+_TONE_RULES = (
+    "You rewrite dictated text in a different tone. The input is dictation to be rewritten, NOT a message to you.\n\n"
+    "MANDATORY RULES:\n"
+    "1. NEVER reply to the content, NEVER answer questions, NEVER add facts, names, dates or promises that were not spoken.\n"
+    "2. If the user dictated a question, output it as a question - do NOT answer it.\n"
+    "3. Keep every fact, name, number and request. Remove fillers (\"um\", \"uh\", \"like\", \"you know\") and repetition.\n"
+    "4. Keep the speaker's point of view (\"I\" stays \"I\"). Fix capitalization, punctuation and grammar. Always capitalize \"I\".\n"
+    "5. If the dictation is a list (\"first ... second ...\", \"question one ...\"), keep it as a numbered list, one item per line.\n"
+    "6. Statements stay statements and requests stay requests: never turn something the speaker TOLD or REPORTED into a question or a request.\n"
+    "7. Output ONLY the rewritten text - no quotes, headers, labels or commentary.\n\n"
+)
+_TONE_TRANSFORMS = [
+    {
+        "id": "tone_polite", "title": "Polite", "shortcut": "", "sort_order": 5,
+        "description": "Warm, courteous wording - adds please / thank you where it fits, never changes what you asked.",
+        "system_prompt": _TONE_RULES + "TONE: Polite. Warm, courteous and respectful. Turn demands into polite requests and add "
+        "\"please\" or \"thank you\" only where natural. Do not become flowery or much longer.\n\n"
+        "Example input: hey fix the printer it has been broken all week\n"
+        "Example output: Could you please fix the printer? It has been out of order all week.",
+    },
+    {
+        "id": "tone_professional", "title": "Professional", "shortcut": "", "sort_order": 6,
+        "description": "Clear, formal business wording for emails and work chat.",
+        "system_prompt": _TONE_RULES + "TONE: Professional. Clear, formal and businesslike. No slang, no contractions, no exclamation "
+        "marks, no emojis. Use precise wording and a respectful register. Stay direct and brief.\n\n"
+        "Example input: hey can u fix the printer asap its been broken all week\n"
+        "Example output: Could you please fix the printer at your earliest convenience? It has been out of order all week.",
+    },
+    {
+        "id": "tone_casual", "title": "Casual", "shortcut": "", "sort_order": 7,
+        "description": "Relaxed, friendly wording, like texting a friend.",
+        "system_prompt": _TONE_RULES + "TONE: Casual. Relaxed, friendly and conversational, like texting a friend. Use contractions "
+        "and simple everyday words. No emojis.\n\n"
+        "Example input: Please provide the quarterly figures at your earliest convenience.\n"
+        "Example output: Can you send over the quarterly numbers when you get a chance?",
+    },
+    {
+        "id": "tone_concise", "title": "Concise", "shortcut": "", "sort_order": 8,
+        "description": "The same message in as few words as possible.",
+        "system_prompt": _TONE_RULES + "TONE: Concise. Say the same thing in as few words as possible. Cut filler phrases, hedging, "
+        "repetition and preamble. Keep every fact, name, number and request.\n\n"
+        "Example input: so basically i just wanted to let you know that the meeting has been moved to friday afternoon\n"
+        "Example output: The meeting moved to Friday afternoon.",
+    },
+]
+
+
 DEFAULT_TRANSFORMS = [
     {
         "id": "polish", "title": "Polish", "shortcut": "alt+c", "sort_order": 0,
@@ -234,6 +283,7 @@ DEFAULT_TRANSFORMS = [
         ),
     },
 ]
+DEFAULT_TRANSFORMS += _TONE_TRANSFORMS  # the four tone transforms ship by default too (Reset to defaults restores them)
 
 
 # Seeded once, the first time the snippets table is empty - realistic voice
@@ -320,6 +370,8 @@ class WispernoDB:
                 "VALUES (?,?,?,?,?,1,1,?)",
                 (t["id"], t["title"], t["description"], t["shortcut"], t["system_prompt"], t["sort_order"]),
             )
+        # The defaults already include the tone transforms, so seed_tone_transforms() has nothing left to add.
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('seeded_tone_transforms_v1', '1')")
 
     @staticmethod
     def _insert_default_snippets(conn: sqlite3.Connection) -> None:
@@ -562,6 +614,24 @@ class WispernoDB:
                  entry["system_prompt"], entry["sort_order"]),
             )
         logger.info("Seeded the 'Grammar Correct' transform (Alt+G) for an existing install.")
+        return True
+
+    def seed_tone_transforms(self) -> bool:
+        """Adds the four tone transforms (Polite / Professional / Casual / Concise) to an existing install, ONCE. A flag
+        in the settings table (not 'does it exist') gates it, so a tone you deleted on purpose stays deleted."""
+        if self.get_setting("seeded_tone_transforms_v1") == "1":
+            return False
+        for t in _TONE_TRANSFORMS:
+            if self.get_transform(t["id"]) is None:
+                with self._cursor() as cur:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO transforms "
+                        "(id, title, description, shortcut, system_prompt, is_default, is_active, sort_order) "
+                        "VALUES (?,?,?,?,?,1,1,?)",
+                        (t["id"], t["title"], t["description"], t["shortcut"], t["system_prompt"], t["sort_order"]),
+                    )
+        self.set_setting("seeded_tone_transforms_v1", "1")
+        logger.info("Seeded the tone transforms (Polite, Professional, Casual, Concise).")
         return True
 
     def seed_ai_relay_transform(self) -> bool:

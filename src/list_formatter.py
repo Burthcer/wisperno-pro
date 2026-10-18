@@ -177,13 +177,28 @@ def _cap_sentences(text: str) -> str:
     return "".join(p[:1].upper() + p[1:] if p and p[0].isalpha() else p for p in parts)
 
 
+# When Whisper left a sentence without end punctuation, a question still gets
+# "?": an auxiliary + subject ("can you ...", "is it ...") or a question word.
+# "do it ..." (imperative) and "when you get home ..." (a clause) aren't.
+QUESTION_START_RE = re.compile(
+    r"^(?:(?:can|could|would|will|should|shall|may|is|are|was|were|am|have|has|had)\s+"
+    r"(?:you|i|we|they|he|she|it|this|that|there|the|my|your|our|anyone|someone|everyone)\b"
+    r"|(?:do|does|did)\s+(?:you|i|we|they|he|she|the|my|your|our|anyone|someone|everyone)\b"
+    r"|(?:what|why|how|where|who|which)\b"
+    r"|when\s+(?:is|are|was|were|will|do|does|did|can|should)\b)",
+    re.IGNORECASE,
+)
+
+
 def _clean_item(text: str, before_cue: bool) -> str:
     text = _LEADING_JUNK.sub("", text).strip()
     text = (_CONNECTORS_BEFORE_CUE if before_cue else _ENDING_CONNECTORS).sub("", text).strip()
     if not re.search(r"[A-Za-z0-9]", text):
         return ""
     text = _cap_sentences(_capitalize(text))
-    return text if text[-1] in ".!?" else text + "."
+    if text[-1] in ".!?":
+        return text
+    return text + ("?" if QUESTION_START_RE.match(re.split(r"(?<=[.!?])\s+", text)[-1]) else ".")
 
 
 def _clean_intro(text: str) -> str:

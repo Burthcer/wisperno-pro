@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui import theme
+from src.ui.action_buttons import IconButton
 
 
 def _label_title(text: str) -> QLabel:
@@ -109,13 +110,7 @@ class SnippetsTab(QWidget):
         active_cb.setChecked(bool(r["is_active"]))
         active_cb.stateChanged.connect(lambda state, sid=r["id"]: self.engine.db.set_snippet_active(sid, state != 0))
         header.addWidget(active_cb)
-        del_btn = QPushButton("Delete")
-        del_btn.setToolTip("Delete this snippet")
-        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        del_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none; color: {theme.DANGER}; padding: 2px 6px; }}"
-            f"QPushButton:hover {{ text-decoration: underline; }}"
-        )
+        del_btn = IconButton("trash", "Delete this snippet", danger=True)
         del_btn.clicked.connect(lambda checked=False, sid=r["id"]: self._delete(sid))
         header.addWidget(del_btn)
         v.addLayout(header)

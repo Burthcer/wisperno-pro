@@ -115,6 +115,7 @@ class WispernoEngine(QObject):
         self.db.free_up_alt_v_shortcut()
         self.db.seed_grammar_correct_transform()
         self.db.seed_ai_relay_transform()
+        self.db.seed_tone_transforms()
         self.db.update_polish_prompt_with_list_rules()
         self.vocabulary = Vocabulary(db=self.db)
 
@@ -161,6 +162,7 @@ class WispernoEngine(QObject):
             logger.warning(f"Could not persist the safe-mode preset fallback: {e}")
 
     def start(self) -> None:
+        audio_cues.prime()  # make sure Windows' per-app volume for us isn't 0 (see audio_cues.ensure_audible)
         guard_path = self._boot_guard_path()
         try:
             if guard_path.exists():

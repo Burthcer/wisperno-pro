@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from src import recent_audio
 from src.ui import theme
+from src.ui.action_buttons import IconButton
 from src.branding import APP_NAME
 
 MODE_LABELS = {
@@ -413,21 +414,22 @@ class HistoryTab(QWidget):
         v.addWidget(raw_label)
 
         actions = QHBoxLayout()
-        actions.setSpacing(18)
-        copy_btn = _link_btn("Copy")
+        actions.setSpacing(8)
+        copy_btn = IconButton("copy", "Copy this text")
         copy_btn.clicked.connect(lambda: self._copy(row["polished_transcript"], copy_btn))
-        pin_btn = _link_btn("Unpin" if row["is_pinned"] else "Pin")
+        pin_btn = IconButton("pin", "Unpin" if row["is_pinned"] else "Pin to the top")
+        pin_btn.set_active(bool(row["is_pinned"]))
         pin_btn.clicked.connect(lambda: self._toggle_pin(row["id"]))
-        fav_btn = _link_btn("Unfavorite" if row["is_favorite"] else "Favorite")
+        fav_btn = IconButton("star", "Remove from favorites" if row["is_favorite"] else "Add to favorites")
+        fav_btn.set_active(bool(row["is_favorite"]))
         fav_btn.clicked.connect(lambda: self._toggle_favorite(row["id"]))
-        dict_btn = _link_btn("+ Dictionary")
+        dict_btn = IconButton("book-plus", "Add a word from this to your dictionary")
         dict_btn.clicked.connect(lambda: self._add_to_dictionary(row["raw_transcript"]))
-        del_btn = _link_btn("Delete", color=theme.DANGER)
+        del_btn = IconButton("trash", "Delete this entry", danger=True)
         del_btn.clicked.connect(lambda: self._delete(row["id"]))
         buttons = [copy_btn, pin_btn, fav_btn, dict_btn, del_btn]
         if row.get("entry_type") != "live_transcript" and recent_audio.has_audio(row["id"]):
-            redo_btn = _link_btn("Re-transcribe")
-            redo_btn.setToolTip("Run the saved audio again with a slower, more careful method. Replaces this entry's text.")
+            redo_btn = IconButton("retry", "Re-transcribe: run the saved audio again with a slower, more careful method. Replaces this entry's text.")
             redo_btn.clicked.connect(lambda: self._retranscribe(row["id"], redo_btn))
             buttons.insert(1, redo_btn)
         for b in buttons:
@@ -442,13 +444,11 @@ class HistoryTab(QWidget):
         from PySide6.QtWidgets import QApplication
 
         QApplication.clipboard().setText(text)
-        original = button.text()
-        button.setText("Copied!")
-        QTimer.singleShot(1200, lambda: button.setText(original))
+        button.flash("Copied!")
 
     def _retranscribe(self, history_id: int, button: QPushButton) -> None:
         if self.engine.retranscribe_history(history_id):
-            button.setText("Re-transcribing...")
+            button.flash("Working...")
             button.setEnabled(False)
         else:
             QMessageBox.information(

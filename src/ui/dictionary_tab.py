@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui import theme
+from src.ui.action_buttons import IconButton
 
 CATEGORIES = ["Jargon", "Acronym", "Name", "Tech"]
 
@@ -144,9 +145,10 @@ class DictionaryTab(QWidget):
             actions.setStyleSheet("background: transparent;")  # else the cell shows as a darker block
             actions_row = QHBoxLayout(actions)
             actions_row.setContentsMargins(0, 0, 0, 0)
-            edit_btn = _text_link_btn("edit", "Edit", theme.TEXT_SECONDARY, theme.TEXT_PRIMARY)
+            actions_row.setSpacing(6)
+            edit_btn = IconButton("edit", "Edit this word")
             edit_btn.clicked.connect(lambda checked=False, entry=e: self._start_edit(entry))
-            del_btn = _text_link_btn("del", "Delete", theme.TEXT_SECONDARY, theme.DANGER)
+            del_btn = IconButton("trash", "Delete this word", danger=True)
             del_btn.clicked.connect(lambda checked=False, eid=e["id"]: self._delete(eid))
             actions_row.addWidget(edit_btn)
             actions_row.addWidget(del_btn)

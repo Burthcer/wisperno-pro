@@ -10,7 +10,7 @@ for the capitalization/terminal-punctuation pass at the end.
 
 import re
 
-from src.list_formatter import format_lists_across_paragraphs, format_spoken_list
+from src.list_formatter import QUESTION_START_RE as _QUESTION_START_RE, format_lists_across_paragraphs, format_spoken_list
 
 # A period/!/?/:/, immediately followed by a letter with NO space at all
 # ("Hello.How are you?") - restricted to letters, never digits, so real
@@ -241,17 +241,6 @@ def strip_fillers(text: str) -> str:
     return _strip_fillers(text)
 
 
-# When Whisper left a sentence without end punctuation, a question still gets
-# "?": an auxiliary + subject ("can you ...", "is it ...") or a question word.
-# "do it ..." (imperative) and "when you get home ..." (a clause) aren't.
-_QUESTION_START_RE = re.compile(
-    r"^(?:(?:can|could|would|will|should|shall|may|is|are|was|were|am|have|has|had)\s+"
-    r"(?:you|i|we|they|he|she|it|this|that|there|the|my|your|our|anyone|someone|everyone)\b"
-    r"|(?:do|does|did)\s+(?:you|i|we|they|he|she|the|my|your|our|anyone|someone|everyone)\b"
-    r"|(?:what|why|how|where|who|which)\b"
-    r"|when\s+(?:is|are|was|were|will|do|does|did|can|should)\b)",
-    re.IGNORECASE,
-)
 
 
 def _cap_punct(item: str) -> str:

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui import theme
+from src.ui.action_buttons import IconButton
 from src.ui.shortcut_recorder import KeySequenceRecorder
 from src.branding import APP_NAME
 
@@ -22,6 +23,14 @@ _FIELD_QSS = (
     f"background-color: {theme.INPUT_BG}; border: 1px solid {theme.BORDER_SUBTLE}; "
     f"border-radius: 8px; padding: 8px; color: {theme.TEXT_PRIMARY};"
 )
+
+
+def _card_blurb(text: str, limit: int = 110) -> str:
+    """The card shows the first ~110 characters, cut at a word boundary (never mid-word)."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(".,;:- ") + "..."
 
 
 def _shortcut_parts(shortcut: str) -> list:
@@ -132,7 +141,7 @@ class _TransformsHub(QWidget):
     def _reset_defaults(self) -> None:
         if QMessageBox.question(
             self, "Reset to defaults",
-            "This restores Polish, Prompt Engineer, and Detailed Code Fix Prompt to their original "
+            "This restores every built-in Transform (Polish, the tones, Prompt Engineer and the rest) to its original "
             "text and deletes any custom Transforms you've created. Continue?"
         ) != QMessageBox.StandardButton.Yes:
             return
@@ -169,7 +178,7 @@ class _TransformsHub(QWidget):
             f"#transformCard:hover {{ border-color: {theme.BORDER_STRONG}; }}"
         )
         card.setCursor(Qt.CursorShape.PointingHandCursor)
-        card.setMinimumHeight(150)
+        card.setMinimumHeight(176)
         v = QVBoxLayout(card)
         v.setContentsMargins(18, 16, 18, 16)
         v.addLayout(_shortcut_row(t["shortcut"]))
@@ -177,9 +186,11 @@ class _TransformsHub(QWidget):
         title = QLabel(t["title"])
         title.setStyleSheet(f"font-size: 12pt; font-weight: 700; color: {theme.TEXT_PRIMARY}; background: transparent; border: none;")
         v.addWidget(title)
-        desc = QLabel(t["description"][:60] + ("..." if len(t["description"]) > 60 else ""))
+        desc = QLabel(_card_blurb(t["description"]))
         desc.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 9pt; background: transparent; border: none;")
         desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        desc.setMinimumHeight(60)  # room for three lines, so wrapped text is never cut off
         v.addWidget(desc)
         v.addStretch()
 
@@ -232,14 +243,14 @@ class _TransformEditor(QWidget):
         save_btn.setObjectName("primary")
         save_btn.clicked.connect(self._save)
         header.addWidget(save_btn)
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.setStyleSheet(f"background: transparent; border: none; color: {theme.DANGER};")
+        self.delete_btn = IconButton("trash", "Delete this Transform (custom ones only)", danger=True)
         self.delete_btn.clicked.connect(self._delete)
         header.addWidget(self.delete_btn)
         outer.addLayout(header)
 
-        self.description_edit = QLineEdit()
+        self.description_edit = QPlainTextEdit()  # multi-line: a long description wraps instead of being cut off
         self.description_edit.setPlaceholderText("Short description shown on the card")
+        self.description_edit.setFixedHeight(74)
         self.description_edit.setStyleSheet(_FIELD_QSS)
         outer.addWidget(self.description_edit)
 
@@ -257,6 +268,8 @@ class _TransformEditor(QWidget):
         self.test_output = QPlainTextEdit(readOnly=True, placeholderText="Transformed output appears here...")
         self.test_input.setStyleSheet(_FIELD_QSS)
         self.test_output.setStyleSheet(_FIELD_QSS)
+        self.test_input.setMinimumHeight(110)
+        self.test_output.setMinimumHeight(110)
         left.addWidget(self.test_input)
         left.addWidget(self.test_output)
         preview_btn = QPushButton("Preview")
@@ -283,7 +296,7 @@ class _TransformEditor(QWidget):
             return
         self.transform_id = transform_id
         self.title_edit.setText(t["title"])
-        self.description_edit.setText(t["description"])
+        self.description_edit.setPlainText(t["description"])
         self.shortcut_recorder.hotkey_str = t["shortcut"]
         self.shortcut_recorder.setText(t["shortcut"].upper() if t["shortcut"] else "Click to set")
         self.prompt_edit.setPlainText(t["system_prompt"])
@@ -297,7 +310,7 @@ class _TransformEditor(QWidget):
         self.engine.db.update_transform(
             self.transform_id,
             title=self.title_edit.text().strip() or "Untitled",
-            description=self.description_edit.text().strip(),
+            description=" ".join(self.description_edit.toPlainText().split()),
             shortcut=self.shortcut_recorder.hotkey_str,
             system_prompt=self.prompt_edit.toPlainText(),
         )

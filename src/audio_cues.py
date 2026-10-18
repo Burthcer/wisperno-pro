@@ -268,6 +268,56 @@ def wav_for(sound_id: str, kind: str) -> Optional[bytes]:
     return _preset_wav(sound_id if sound_id in PRESETS else DEFAULT_SOUND, kind)
 
 
+def ensure_audible() -> bool:
+    """Windows keeps a per-program volume (the volume mixer) and remembers it by exe name. If WispernoPro.exe was ever
+    turned to 0 or muted there, every cue plays silently while other apps sound fine. Put OUR session back to full
+    volume, unmuted; returns True if it had to. Never touches another program's volume."""
+    try:
+        import os
+
+        from pycaw.pycaw import AudioUtilities
+
+        for session in AudioUtilities.GetAllSessions():
+            if session.Process is not None and session.Process.pid == os.getpid():
+                volume = session.SimpleAudioVolume
+                if volume.GetMute() or volume.GetMasterVolume() < 0.5:
+                    volume.SetMute(0, None)
+                    volume.SetMasterVolume(1.0, None)
+                    logger.info("Sound cues: the Windows volume mixer had Wisperno Pro muted/at 0 - restored to full.")
+                    return True
+    except Exception as e:
+        logger.debug(f"ensure_audible skipped: {e}")
+    return False
+
+
+def _silent_wav(ms: int = 40) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(bytes(2 * int(SAMPLE_RATE * ms / 1000)))
+    return buf.getvalue()
+
+
+def prime() -> None:
+    """At startup: a silent blip makes Windows create our mixer session, then fix its volume if needed, so the very
+    first cue is already audible."""
+    if sys.platform != "win32":
+        return
+
+    def run() -> None:
+        try:
+            import winsound
+
+            winsound.PlaySound(_silent_wav(), winsound.SND_MEMORY | winsound.SND_NODEFAULT)
+        except Exception as e:
+            logger.debug(f"Sound prime failed: {e}")
+        ensure_audible()
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _play(sound_id: str, kind: str) -> None:
     if sys.platform != "win32":
         return
@@ -276,6 +326,7 @@ def _play(sound_id: str, kind: str) -> None:
 
         data = wav_for(sound_id, kind)
         if data:
+            ensure_audible()
             # SND_MEMORY can't be combined with SND_ASYNC, so this blocks - which is why it runs on its own thread.
             winsound.PlaySound(data, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception as e:

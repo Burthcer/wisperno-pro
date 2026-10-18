@@ -69,7 +69,8 @@ PRESET_MARGIN = 24
 
 PILL_H = 30                  # height while something is happening
 IDLE_W, IDLE_H = 54, 14      # at rest
-HOVER_W, HOVER_H = 72, 36    # under the cursor: two equal round buttons (mic, transform wand)
+HOVER_W, HOVER_H = 90, 36    # under the cursor: a wide capsule mic button and a round transform wand
+MIC_W = 44                   # the mic is a capsule, much easier to hit than a small circle
 WAND_EXTRA = 24              # the wand button slides open this much to show its arrow while the mouse is on it
 ACTIVE_W = 156               # [x] waveform [check]
 BUSY_W = 72                  # dots only
@@ -488,15 +489,17 @@ class FloatingPill(QWidget):
         """[mic] [wand v] - start dictating, and choose which transform runs after dictation."""
         d = h - 2.0 * EDGE_PAD
         cy = h / 2.0
-        self._mic_rect = QRectF(EDGE_PAD, cy - d / 2.0, d, d)
+        self._mic_rect = QRectF(EDGE_PAD, cy - d / 2.0, MIC_W, d)
         gap = 10.0  # air between the mic and wand buttons
-        wand_w = w - EDGE_PAD * 2 - d - gap
+        wand_w = w - EDGE_PAD * 2 - MIC_W - gap
         self._wand_rect = QRectF(self._mic_rect.right() + gap, cy - d / 2.0, wand_w, d)
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if self._hover_mic else theme.PILL_BUTTON))
-        painter.drawEllipse(self._mic_rect)
-        self._paint_mic_glyph(painter, self._mic_rect, theme.PILL_TEXT_PRIMARY if self._hover_mic else theme.PILL_TEXT)
+        painter.drawRoundedRect(self._mic_rect, d / 2.0, d / 2.0)
+        glyph_box = QRectF(0, 0, d, d)
+        glyph_box.moveCenter(self._mic_rect.center())  # the glyph stays square inside the wider capsule
+        self._paint_mic_glyph(painter, glyph_box, theme.PILL_TEXT_PRIMARY if self._hover_mic else theme.PILL_TEXT)
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.PILL_BUTTON_HOVER if (self._hover_wand or self._menu_open) else theme.PILL_BUTTON))

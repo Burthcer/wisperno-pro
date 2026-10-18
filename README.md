@@ -241,7 +241,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.4.0` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.5.0` file from the
 release into **one folder** - the small `.exe` and the three numbered `.bin` parts (about 4.9 GB
 in total; the installer uses disk spanning, so it reads the parts from beside itself) - then run the
 `.exe`. It upgrades an existing Wisperno Pro in place, keeping your settings, history and dictionary,
@@ -273,6 +273,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 | Version | Highlights |
 |---|---|
+| **1.5.0** | **Sounds fixed**: Windows can remember a program's volume as 0 in the volume mixer, which made every cue silent; Wisperno now restores its own volume. Four **tone transforms** (Polite, Professional, Casual, Concise), spoken lists like "Question 1... Question 2..." come out as a numbered list with proper `?` marks, and the clipped Transforms text boxes are fixed. History, Snippets, Dictionary and Transforms use real **icon buttons** (star, pin, copy, edit, trash, retry) with a green "Copied!" confirmation. Redesigned **"No active text field detected" card** (status dot, preview, orange Copy button, round close button) with stricter detection so it no longer pops up over editors and chat boxes. The mic button on the hovered pill is a wide capsule. Installer builds now delete all but the newest two versions. |
 | **1.4.0** | Bigger, equal round **mic and wand buttons** on the hovered pill (the wand slides open to show its arrow only while the mouse is on it) and a slightly longer resting strip. New **"no text box" card**: if a dictation has nowhere to land, a card above the pill shows the text with **Copy** and **Dismiss** buttons (nothing is copied unless you press Copy). New **"Cut spoken padding"** setting (on by default) drops empty phrases such as "and yeah", "so yeah" and ", I guess," - never answers or opinions - while History keeps the untouched text. |
 | **1.3.0** | Hover the pill for a **mic button and a transform menu** (pick Polish / Prompt Engineer / ... with the mouse, with an Auto Apply switch). Fixed the pill sometimes sticking on "processing" after the tick.  Settings split into nine named tabs, including **Sounds** (seven built-in start/stop sounds with Preview, drag-and-drop your own `.wav`). Long dictation is **split into paragraphs by topic**. System Usage: graphics memory now matches Task Manager, each ring shows Wisperno Pro's own share in orange, and the disk-space card says what can be deleted (history, recordings) and what is the app itself. Profanity filter catches more masking styles (`f**king`, `f#cking`...) and also covers Live Transcription. Cleanup no longer drops "you know" from "letting you know". New orange logo, drawn in code if the file ever fails to load. **Installer 7.9 GB -> 4.9 GB** (no more bundled PyTorch). |
 | 1.1.0 | Dashboard polish (card layouts, hover states, empty states), eight Settings tabs, System Usage with ring gauges and a disk-space breakdown, new logo, soft chime instead of a beep. |
@@ -389,7 +390,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.4.0. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.5.0. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

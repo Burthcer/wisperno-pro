@@ -847,7 +847,27 @@ class Transformer:
         if self.llm is None or not system_prompt:
             return apply_profanity_filter(raw_text.strip(), self.profanity_filter)
         raw_text = apply_spoken_domains(raw_text)
+        if label.startswith("tone_"):
+            return apply_profanity_filter(self._run_tone(raw_text, label, system_prompt), self.profanity_filter)
         return apply_profanity_filter(self._run(raw_text, label, system_prompt, " "), self.profanity_filter)
+
+    _LIST_MARKER_RE = re.compile(r"^(\d+\.\s+|\u2022\s+)")
+
+    def _run_tone(self, raw_text: str, label: str, system_prompt: str) -> str:
+        """Tone rewrites (Polite / Professional / Casual / Concise): lay out any spoken list first, then rewrite one
+        line at a time and put the list markers back - a small model otherwise merges the items or lets the tone
+        instruction leak into the text."""
+        laid_out = format_lists_in_text(strip_fillers(apply_scratch_that(raw_text))) or raw_text
+        lines = []
+        for line in laid_out.split("\n"):
+            if not line.strip():
+                lines.append("")
+                continue
+            marker = self._LIST_MARKER_RE.match(line)
+            body = line[marker.end():] if marker else line
+            rewritten = self._run(body, label, system_prompt, " ").strip()
+            lines.append((marker.group(1) if marker else "") + (rewritten or body))
+        return "\n".join(lines)
 
     def _run(self, raw_text: str, label: str, system_prompt: str, separator: str) -> str:
         self.last_fallback_applied = False
