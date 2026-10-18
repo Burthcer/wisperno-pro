@@ -91,6 +91,12 @@ logger.add(
 )
 logger.info(f"{APP_NAME} starting - logging initialized.")
 
+if "--probe-focus" in sys.argv:  # diagnostics: report what the paste check sees right now, then exit (works while the app runs)
+    from src.focus_check import has_text_target
+
+    logger.info(f"[PROBE] has_text_target() = {has_text_target()}")
+    sys.exit(0)
+
 from src import single_instance  # noqa: E402
 
 single_instance.acquire()
@@ -108,7 +114,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from PySide6.QtCore import QPoint  # noqa: E402
+from PySide6.QtCore import QObject, QPoint, Signal  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from src.engine import WispernoEngine  # noqa: E402
@@ -120,6 +126,12 @@ from src.ui.tray import TrayIcon  # noqa: E402
 from src.ui.theme import get_app_icon  # noqa: E402
 
 logger.info("Light imports complete - showing UI before loading engines.")
+
+
+class _ShowDashboardBridge(QObject):
+    """Lets the single-instance listener thread ask the GUI thread to open the dashboard."""
+
+    requested = Signal()
 
 
 class WispernoApp:
@@ -191,6 +203,11 @@ class WispernoApp:
         self.pill.quit_requested.connect(self.shutdown_application)
 
         self._shutting_down = False
+
+        # Double-clicking the app icon while it already runs (e.g. minimized to tray) opens the dashboard.
+        self._show_bridge = _ShowDashboardBridge()
+        self._show_bridge.requested.connect(self.open_dashboard)
+        single_instance.listen_for_show_requests(self._show_bridge.requested.emit)
 
         self.engine.start()
 

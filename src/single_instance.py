@@ -32,6 +32,46 @@ OVERLAY_WINDOW_TITLE = BRAND_OVERLAY_TITLE
 _mutex_handle: Optional[int] = None
 
 
+SHOW_EVENT_NAME = MUTEX_NAME + "_ShowDashboard"
+_show_event = None  # the running instance's "please open the dashboard" event (kept alive for the process lifetime)
+
+
+def _signal_existing_to_show_dashboard() -> bool:
+    """A second launch asks the running copy to open its dashboard (what double-clicking an app icon should do)."""
+    try:
+        kernel32.OpenEventW.restype = ctypes.c_void_p
+        handle = kernel32.OpenEventW(0x0002, False, SHOW_EVENT_NAME)  # EVENT_MODIFY_STATE
+        if not handle:
+            return False
+        kernel32.SetEvent(ctypes.c_void_p(handle))
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        return True
+    except Exception:
+        return False
+
+
+def listen_for_show_requests(callback) -> None:
+    """Run `callback()` on a background thread every time another launch asks this instance to show its dashboard."""
+    global _show_event
+    import threading
+
+    kernel32.CreateEventW.restype = ctypes.c_void_p
+    _show_event = kernel32.CreateEventW(None, False, False, SHOW_EVENT_NAME)  # auto-reset
+    if not _show_event:
+        return
+
+    def wait_loop() -> None:
+        while True:
+            if kernel32.WaitForSingleObject(ctypes.c_void_p(_show_event), 0xFFFFFFFF) != 0:
+                return
+            try:
+                callback()
+            except Exception as e:
+                logger.warning(f"Show-dashboard request failed: {e}")
+
+    threading.Thread(target=wait_loop, daemon=True, name="show-dashboard-listener").start()
+
+
 def _focus_existing_instance() -> bool:
     """Bring the already-running instance's pill to the foreground, if we can find it."""
     hwnd = user32.FindWindowW(None, OVERLAY_WINDOW_TITLE)
@@ -83,7 +123,8 @@ def acquire(notify: bool = True) -> None:
 
     if _mutex_handle and last_error == ERROR_ALREADY_EXISTS:
         logger.warning(f"Another {APP_NAME} instance is already running - exiting this one.")
-        focused = _focus_existing_instance()
+        focused = _signal_existing_to_show_dashboard()  # opens the running copy's dashboard window
+        focused = _focus_existing_instance() or focused
         if notify and not focused and not os.environ.get("WISPERNO_QUIET_DUPLICATE"):
             _notify_already_running()
         logger.info(f"Existing instance {'flashed on screen' if focused else 'not found on screen'}; exiting.")

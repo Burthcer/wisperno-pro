@@ -88,12 +88,13 @@ def has_text_target() -> bool:
         import comtypes
 
         comtypes.CoInitialize()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[PASTE CHECK] UI Automation is not available ({e}); the 'no text box' card is off.")
         return True
     try:
         return _inspect_focus()
     except Exception as e:
-        logger.debug(f"[PASTE CHECK] could not inspect the focused element ({e}); assuming a text box.")
+        logger.warning(f"[PASTE CHECK] could not inspect the focused element ({e}); assuming a text box.")
         return True
     finally:
         comtypes.CoUninitialize()
