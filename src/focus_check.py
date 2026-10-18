@@ -36,6 +36,10 @@ _NEVER_TEXT = {
     50038,  # Separator
 }
 _PANE, _WINDOW = 50033, 50032
+# Containers and labels: when one of these has focus and exposes no text or value, nothing can be typed into it. Measured
+# in Edge: web inputs are always Edit (50004); a focused Group/Custom/Pane/Text is just a page area. Terminals and word
+# processors still pass because they expose a text pattern.
+_CONTAINER_TYPES = {50020, 50025, 50026, _PANE, _WINDOW}  # Text, Custom, Group, Pane, Window
 _EDITABLE = {50003, 50004}  # ComboBox, Edit: always a place to type
 # A bare pane / window only counts as "no text box" in the desktop shell (explorer.exe: the desktop, the taskbar, a
 # folder). In other programs a pane can be a terminal or a custom editor, so it stays "text box".
@@ -53,9 +57,7 @@ def is_text_target(control_type: int, has_text_pattern: bool, has_value_pattern:
         return False
     if has_text_pattern or has_value_pattern:
         return True
-    if control_type in _NEVER_TEXT:
-        return False
-    if control_type in (_PANE, _WINDOW) and process.lower() in _SHELL_PROCESSES:
+    if control_type in _NEVER_TEXT or control_type in _CONTAINER_TYPES:
         return False
     return True
 

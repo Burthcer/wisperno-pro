@@ -321,6 +321,7 @@ class SystemUsageTab(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(2000)
+        QTimer.singleShot(150, self.refresh)  # first numbers right away, not after the first 2 s tick
         self.refresh()
         self.refresh_storage()
 
@@ -329,6 +330,7 @@ class SystemUsageTab(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self.refresh()  # live meters right away when the tab is opened
         self.refresh_storage()  # sizes change as history grows / recordings rotate
 
     def _on_engine_state_changed(self, state: str) -> None:

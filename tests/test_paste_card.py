@@ -52,9 +52,10 @@ def test_detection_rules() -> None:
 
     assert is_text_target(50004, False, False) is True, "Edit"
     assert is_text_target(50030, False, False) is True, "Document"
-    assert is_text_target(50026, False, False) is True, "Group (web chat box): unknown means text box"
-    assert is_text_target(50033, False, False, "chrome.exe") is True, "a pane in a normal program may be an editor"
-    assert is_text_target(50033, False, False, "terminal.exe") is True
+    assert is_text_target(50026, False, False) is False, "a Group with no text/value is just a page area"
+    assert is_text_target(50033, False, False, "chrome.exe") is False, "a bare pane"
+    assert is_text_target(50033, True, False, "windowsterminal.exe") is True, "a terminal exposes a text pattern"
+    assert is_text_target(50016, False, False) is True, "unknown element types still count as a text box"
     assert is_text_target(50000, True, False) is True, "anything with a text/value pattern is a text box"
     assert is_text_target(50000, False, False) is False, "Button"
     assert is_text_target(50008, False, False) is False, "List"

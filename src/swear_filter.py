@@ -91,9 +91,48 @@ def _unmask_token(token: str) -> Optional[str]:
     return best
 
 
+# Whisper often "bleeps" a swear word with a dash instead of asterisks: "f-ing", "f-" (cut off), "sh-t", "b-tch".
+# Only these exact shapes are restored, so ordinary hyphenated words ("f-stop", "F-16", "well-known") never change.
+_DASH = r"[-\u2010-\u2014]{1,3}"
+_DASH_FORMS = (
+    (rf"f{_DASH}(?:ing|in)\b", {"ing": "fucking", "in": "fuckin"}),
+    (rf"f{_DASH}(?:cking|king)\b", "fucking"),
+    (rf"f{_DASH}(?:cked|ked|ed)\b", "fucked"),
+    (rf"f{_DASH}(?:cker|ker|er)\b", "fucker"),
+    (rf"f{_DASH}(?:ck|k)\b", "fuck"),
+    (rf"sh{_DASH}tty\b", "shitty"),
+    (rf"sh{_DASH}t\b", "shit"),
+    (rf"b{_DASH}tch\b", "bitch"),
+    (rf"d{_DASH}mn\b", "damn"),
+    (rf"a{_DASH}?{_DASH}hole\b", "asshole"),
+    (rf"f{_DASH}(?=[\s.,!?;:)\"']|$)", "fuck"),  # a cut-off "f-" followed by a space or punctuation
+)
+_DASH_RES = [(re.compile(rf"(?<![\w-]){pattern}", re.IGNORECASE), word) for pattern, word in _DASH_FORMS]
+
+
+def _unmask_dashes(text: str) -> str:
+    def make(word):
+        def sub(m):
+            if isinstance(word, dict):
+                tail = re.sub(rf"^f{_DASH}", "", m.group(0), flags=re.IGNORECASE).lower()
+                out = word.get(tail, word["ing"])
+            else:
+                out = word
+            if m.group(0).isupper() and len(m.group(0)) > 2:
+                return out.upper()
+            return out[0].upper() + out[1:] if m.group(0)[0].isupper() else out
+        return sub
+
+    for rx, word in _DASH_RES:
+        text = rx.sub(make(word), text)
+    return text
+
+
 def unmask_profanity(text: str) -> str:
-    """Replace masked swear words ("f**king") with the word itself ("fucking"),
+    """Replace masked swear words ("f**king", "f-ing") with the word itself ("fucking"),
     keeping the first letter's case. Tokens that match no known word are untouched."""
+    text = _unmask_dashes(text or "")
+
     def restore(m):
         word = _unmask_token(m.group(1))
         if word is None:
@@ -101,7 +140,7 @@ def unmask_profanity(text: str) -> str:
         if m.group(1).isupper():
             return word.upper()
         return word[0].upper() + word[1:] if m.group(1)[0].isupper() else word
-    return _MASKED_RE.sub(restore, text or "")
+    return _MASKED_RE.sub(restore, text)
 
 
 def _is_name(m) -> bool:

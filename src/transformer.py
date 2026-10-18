@@ -851,12 +851,18 @@ class Transformer:
             return apply_profanity_filter(self._run_tone(raw_text, label, system_prompt), self.profanity_filter)
         return apply_profanity_filter(self._run(raw_text, label, system_prompt, " "), self.profanity_filter)
 
+    @staticmethod
+    def _same_text(a: str, b: str) -> bool:
+        norm = lambda t: re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()  # noqa: E731
+        return norm(a) == norm(b)
+
     _LIST_MARKER_RE = re.compile(r"^(\d+\.\s+|\u2022\s+)")
 
     def _run_tone(self, raw_text: str, label: str, system_prompt: str) -> str:
         """Tone rewrites (Polite / Professional / Casual / Concise): lay out any spoken list first, then rewrite one
         line at a time and put the list markers back - a small model otherwise merges the items or lets the tone
         instruction leak into the text."""
+        raw_text = apply_profanity_filter(raw_text, "remove")  # a tone rewrite never keeps swear words, whatever the filter says
         laid_out = format_lists_in_text(strip_fillers(apply_scratch_that(raw_text))) or raw_text
         lines = []
         for line in laid_out.split("\n"):
@@ -866,6 +872,13 @@ class Transformer:
             marker = self._LIST_MARKER_RE.match(line)
             body = line[marker.end():] if marker else line
             rewritten = self._run(body, label, system_prompt, " ").strip()
+            if label != "tone_concise" and self._same_text(rewritten, body):
+                # the small model sometimes hands the input back unchanged: ask once more, firmly
+                retry_prompt = system_prompt + (
+                    "\n\nIMPORTANT: your last answer repeated the input. Rewrite it now with clearly different wording "
+                    "in the requested tone, keeping the same meaning."
+                )
+                rewritten = self._run(body, label, retry_prompt, " ").strip() or rewritten
             lines.append((marker.group(1) if marker else "") + (rewritten or body))
         return "\n".join(lines)
 

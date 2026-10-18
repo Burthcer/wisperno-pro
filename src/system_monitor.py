@@ -231,26 +231,48 @@ class SystemMonitor:
         self._proc_vram = _ProcessVramReader()
         self._mismatch_logged = False
         self._first_reading_logged = False
+        self._low_used_logged = False
+
+    def _read_gpu_memory(self) -> tuple:
+        """(total_mb, used_mb) of the whole GPU. NVML sometimes answers 0 / an error on a laptop GPU that was idle, so a
+        zero or failure is retried with the older struct and then after re-opening NVML."""
+        if self._gpu_handle is None:
+            return 0.0, 0.0
+
+        def attempt(version_two: bool):
+            mem = (pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle, pynvml.nvmlMemory_v2) if version_two
+                   else pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle))
+            return mem.total / 1024 / 1024, mem.used / 1024 / 1024
+
+        best = (0.0, 0.0)
+        for reopen in (False, True):
+            if reopen:
+                try:
+                    pynvml.nvmlShutdown()
+                    pynvml.nvmlInit()
+                    self._gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                except Exception as e:
+                    logger.debug(f"NVML re-open failed: {e}")
+                    break
+            # v2 reports the driver's own reserved memory separately; v1's "used" includes it (~0.25 GB more than Task
+            # Manager's "Dedicated GPU memory"). v2 is what Task Manager shows, so it goes first.
+            for version_two in (True, False):
+                try:
+                    total, used = attempt(version_two)
+                except Exception as e:
+                    logger.debug(f"GPU memory read failed ({'v2' if version_two else 'v1'}): {e}")
+                    continue
+                best = (max(best[0], total), max(best[1], used))
+                if used > 0:
+                    return total, used
+        return best
 
     def snapshot(self) -> dict:
         """Returns MB-denominated gpu_total/gpu_used/app_vram and ram_total/ram_used/app_ram."""
         ram = psutil.virtual_memory()
         app_ram_mb = psutil.Process(self._pid).memory_info().rss / 1024 / 1024
 
-        gpu_total_mb = gpu_used_mb = 0.0
-        if self._gpu_handle is not None:
-            try:
-                # The v2 struct reports the driver's own reserved memory separately; v1's "used"
-                # includes it, which made this read ~0.25 GB higher than Windows Task Manager's
-                # "Dedicated GPU memory". v2's "used" is what Task Manager shows.
-                try:
-                    mem = pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle, pynvml.nvmlMemory_v2)
-                except Exception:
-                    mem = pynvml.nvmlDeviceGetMemoryInfo(self._gpu_handle)
-                gpu_total_mb = mem.total / 1024 / 1024
-                gpu_used_mb = mem.used / 1024 / 1024
-            except Exception as e:
-                logger.debug(f"GPU total/used telemetry read failed: {e}")
+        gpu_total_mb, gpu_used_mb = self._read_gpu_memory()
 
         pdh_dedicated_mb, app_shared_mb, breakdown = self._proc_vram.read(self._pid)
         app_vram_mb, app_vram_source = pdh_dedicated_mb, "per-process counter"
@@ -274,6 +296,14 @@ class SystemMonitor:
                     f"{', '.join(breakdown) or 'none'}"
                 )
 
+        if gpu_total_mb and gpu_used_mb < app_vram_mb:
+            # NVML says the whole GPU uses LESS than this app alone holds, which can't be true (it read 0 while Task
+            # Manager showed 3.3 GB). Trust the larger figure so the gauge never falls to 0% with models loaded.
+            if not self._low_used_logged:
+                self._low_used_logged = True
+                logger.warning(f"[VRAM] NVML reports {gpu_used_mb:.0f}MB used in total but this app holds ~{app_vram_mb:.0f}MB - "
+                               f"using the app's figure as the floor.")
+            gpu_used_mb = app_vram_mb
         if gpu_used_mb:
             app_vram_mb = min(app_vram_mb, gpu_used_mb)  # the app can't hold more than the whole GPU has in use
 
