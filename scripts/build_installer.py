@@ -117,6 +117,10 @@ def main() -> None:
     print("Cleaning up the staging directory...")
     shutil.rmtree(staging_dir, ignore_errors=True)
 
+    from prune_builds import prune  # keep only the newest versions in Final App (no stale-copy pile-up)
+    for old in prune():
+        print(f"Removed old build: {old.name}")
+
     print("\n" + "=" * 70)
     print(f" Installer built: {setup_exe.name} + {len(volumes) - 1} volume(s) ({total_gb:.2f} GB total)")
     for f in volumes:
