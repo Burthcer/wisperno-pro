@@ -195,8 +195,9 @@ def pill_menu_shot() -> None:
     pill_img = pill.grab().scaled(pill.width() * 3, pill.height() * 3, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
     pill.close()
     items = [("polish", "Polish"), ("prompt_engineer", "Prompt Engineer"), ("code_fix", "Detailed Code Fix Prompt"),
-             ("grammar_correct", "Grammar Correct"), ("ai_relay", "AI Relay")]
-    menu = build_transform_menu(None, items, "polish", True, lambda t: None, lambda b: None, lambda: None)
+             ("grammar_correct", "Grammar Correct"), ("tone_polite", "Polite"), ("tone_professional", "Professional"),
+             ("tone_casual", "Casual"), ("tone_concise", "Concise")]
+    menu = build_transform_menu(None, items, "polish", lambda t: None, lambda: None)
     menu.popup(QPoint(0, 0))
     QTest.qWait(200)
     menu_img = menu.grab()
@@ -247,8 +248,41 @@ def position_preset_diagram() -> None:
     print("saved pill-positions.png")
 
 
+def paste_card_shot() -> None:
+    """The 'No active text field detected' card (demo text only), before and after pressing Copy."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+    from src.ui.paste_card import PasteCard
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    card = PasteCard()
+    card.show_for("Send the quarterly numbers to Priya by Friday, and cc the finance team. "
+                  "Also remind everyone that the installer is ready for testing.", QPoint(900, 800))
+    QTest.qWait(120)
+    before = card.grab()
+    card._copy()
+    QTest.qWait(400)
+    after = card.grab()
+    card.close()
+    pad = 24
+    sheet = QPixmap(before.width() * 2 + 3 * pad, before.height() + 2 * pad)
+    sheet.fill(QColor(theme.BG_APP))
+    q = QPainter(sheet)
+    q.drawPixmap(pad, pad, before)
+    q.drawPixmap(2 * pad + before.width(), pad, after)
+    q.end()
+    OUT.mkdir(parents=True, exist_ok=True)
+    sheet.save(str(OUT / "paste-card.png"))
+    print("saved paste-card.png")
+
+
 if __name__ == "__main__":
     pill_shots()
+    paste_card_shot()
     pill_menu_shot()
     position_preset_diagram()
     dashboard_shots()

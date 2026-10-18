@@ -441,7 +441,7 @@ class WispernoEngine(QObject):
     def _auto_apply_transform(self) -> Optional[dict]:
         """The Transforms-hub entry every dictation should be run through (the pill's wand menu), or None for
         ordinary dictation. 'polish' is the ordinary path, so picking it - or switching Auto Apply off - means None."""
-        if not self.config.auto_apply_transform or self.config.active_transform in ("", "polish"):
+        if not self.config.dictation_uses_transform or self.config.active_transform in ("", "polish"):
             return None
         transform = self.db.get_transform(self.config.active_transform)
         return transform if transform and transform.get("is_active", 1) else None
@@ -450,9 +450,28 @@ class WispernoEngine(QObject):
         self.config.active_transform = transform_id
         self.save_config()
 
-    def set_auto_apply_transform(self, enabled: bool) -> None:
-        self.config.auto_apply_transform = enabled
+    def set_dictation_uses_transform(self, enabled: bool) -> None:
+        self.config.dictation_uses_transform = enabled
         self.save_config()
+
+    def apply_transform_to_selection(self) -> None:
+        """The pill's wand button: run the CHOSEN transform on the text currently selected in the active app and
+        paste the result over it (the same path as tapping a transform's hotkey with text selected)."""
+        if not self._engines_ready or self._processing or self._live_worker is not None or self._is_releasing():
+            self.state_changed.emit("idle")
+            return
+        transform = self.db.get_transform(self.config.active_transform) or self.db.get_transform("polish")
+        if not transform:
+            return
+        self._processing = True
+        worker = SelectionPolishWorker(
+            self.injector, self.transformer, self.db, mode=transform["id"], system_prompt=transform["system_prompt"],
+        )
+        worker.state_changed.connect(self.state_changed)
+        worker.result_ready.connect(self.history_added)
+        worker.finished.connect(self._on_inference_finished)
+        self._inference_worker = worker
+        worker.start()
 
     def _start_dictation_worker(self, audio_array, record_duration_ms: float) -> None:
         self._processing = True

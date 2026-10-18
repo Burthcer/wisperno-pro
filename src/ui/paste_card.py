@@ -6,7 +6,7 @@ copied unless you press Copy. Colours: theme tokens only.
 """
 
 from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, QVariantAnimation
-from PySide6.QtGui import QClipboard, QColor, QFont, QGuiApplication, QPainter, QPen, QTextOption
+from PySide6.QtGui import QClipboard, QColor, QFont, QFontMetricsF, QGuiApplication, QPainter, QPen, QTextOption
 from PySide6.QtWidgets import QWidget
 
 from src.ui import theme
@@ -14,7 +14,7 @@ from src.ui.action_buttons import draw_icon
 
 CARD_W, CARD_H = 372, 218
 SHOW_SECONDS = 30
-MAX_CHARS = 360  # the card previews long dictations; Copy still copies all of it
+MAX_CHARS = 20000  # effectively the whole dictation: the preview scrolls (mouse wheel), and Copy copies all of it
 PAD = 18
 
 
@@ -30,6 +30,7 @@ class PasteCard(QWidget):
         self._copied = False
         self._pop = 1.0
         self._hover = ""
+        self._scroll = 0.0
         self._copy_rect = QRectF(PAD, CARD_H - 56, CARD_W - 2 * PAD, 40)
         self._close_rect = QRectF(CARD_W - PAD - 26, 14, 26, 26)
         self._preview_rect = QRectF(PAD, 60, CARD_W - 2 * PAD, CARD_H - 128)
@@ -41,6 +42,7 @@ class PasteCard(QWidget):
     def show_for(self, text: str, above: QPoint) -> None:
         """`above` = top-centre of the pill; the card stands over it, nudged to stay on its screen."""
         self._text, self._copied, self._pop = text, False, 1.0
+        self._scroll = 0.0
         screen = QGuiApplication.screenAt(above) or QGuiApplication.primaryScreen()
         geo = screen.availableGeometry()
         x = max(geo.left() + 8, min(above.x() - CARD_W // 2, geo.right() - CARD_W - 8))
@@ -64,6 +66,23 @@ class PasteCard(QWidget):
     def _on_pop(self, value) -> None:
         self._pop = float(value)
         self.update()
+
+    def _text_metrics(self) -> tuple:
+        """(text rect inside the preview, wrapped text height, how far it can scroll)."""
+        inner = self._preview_rect.adjusted(14, 10, -20, -10)
+        shown = self._text if len(self._text) <= MAX_CHARS else self._text[:MAX_CHARS].rstrip() + "..."
+        option = QTextOption(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        option.setWrapMode(QTextOption.WrapMode.WordWrap)
+        height = QFontMetricsF(self._font(9.6, QFont.Weight.Normal)).boundingRect(
+            QRectF(0, 0, inner.width(), 100000), int(Qt.TextFlag.TextWordWrap), shown).height()
+        return inner, shown, option, height, max(0.0, height - inner.height())
+
+    def wheelEvent(self, event) -> None:
+        _inner, _shown, _option, _height, limit = self._text_metrics()
+        if limit > 0:
+            self._scroll = min(limit, max(0.0, self._scroll - event.angleDelta().y() / 120.0 * 36.0))
+            self.update()
+        event.accept()
 
     def mouseMoveEvent(self, event) -> None:
         pos = event.position()
@@ -133,10 +152,18 @@ class PasteCard(QWidget):
         p.drawRoundedRect(self._preview_rect, 12, 12)
         p.setFont(self._font(9.6, QFont.Weight.Normal))
         p.setPen(QColor(theme.PILL_TEXT_PRIMARY))
-        shown = self._text if len(self._text) <= MAX_CHARS else self._text[:MAX_CHARS].rstrip() + "..."
-        option = QTextOption(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        option.setWrapMode(QTextOption.WrapMode.WordWrap)
-        p.drawText(self._preview_rect.adjusted(14, 10, -14, -10), shown, option)
+        inner, shown, option, text_h, limit = self._text_metrics()
+        p.save()
+        p.setClipRect(inner.adjusted(-2, -4, 6, 4))
+        p.drawText(QRectF(inner.left(), inner.top() - self._scroll, inner.width(), text_h + 4), shown, option)
+        p.restore()
+        if limit > 0:  # a slim scrollbar thumb: the text is longer than the box (scroll with the mouse wheel)
+            track_h = inner.height()
+            thumb_h = max(18.0, track_h * inner.height() / text_h)
+            thumb_y = inner.top() + (track_h - thumb_h) * (self._scroll / limit)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(theme.PILL_BUTTON_HOVER))
+            p.drawRoundedRect(QRectF(self._preview_rect.right() - 10, thumb_y, 4, thumb_h), 2, 2)
 
         # Copy button (orange; green check + "Copied!" after a click)
         hot = self._hover == "copy"

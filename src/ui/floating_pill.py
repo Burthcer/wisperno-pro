@@ -125,7 +125,8 @@ class FloatingPill(QWidget):
     cancel_dictation_requested = Signal()   # the x while recording
     position_changed = Signal(int, int)     # centre (x, y) after the user drags it
     position_reset_requested = Signal()
-    transform_menu_requested = Signal()     # the wand button on the hovered pill
+    transform_menu_requested = Signal()     # the little arrow on the wand: choose which transform
+    transform_apply_requested = Signal()    # the wand itself: run the chosen transform on the selected text
 
     def __init__(
         self,
@@ -173,6 +174,7 @@ class FloatingPill(QWidget):
         self._hover_finish = False
         self._mic_rect = QRectF()    # the hover buttons (empty unless the idle pill is expanded)
         self._wand_rect = QRectF()
+        self._chevron_rect = QRectF()   # the arrow part of the open wand: opens the menu
         self._hover_mic = False
         self._hover_wand = False
         self._menu_open = False      # the transform menu is showing: keep the pill expanded under it
@@ -511,6 +513,9 @@ class FloatingPill(QWidget):
         self._paint_wand_glyph(painter, QRectF(icon_left, self._wand_rect.top(), d, d), glyph_color)
         if show_chevron:
             self._paint_chevron(painter, QPointF(self._wand_rect.right() - 11.0, cy), glyph_color)
+            self._chevron_rect = QRectF(self._wand_rect.right() - 28.0, self._wand_rect.top(), 28.0, d)
+        else:
+            self._chevron_rect = QRectF()
 
     @staticmethod
     def _paint_mic_glyph(painter: QPainter, rect: QRectF, color: str) -> None:
@@ -553,7 +558,7 @@ class FloatingPill(QWidget):
         if self._hover_buttons_visible():
             self._paint_hover_buttons(painter, w, h)
             return
-        self._mic_rect = self._wand_rect = QRectF()
+        self._mic_rect = self._wand_rect = self._chevron_rect = QRectF()
         loading = self.state == STATE_LOADING
         n = 5
         bar_w, gap = 2.0, 3.0
@@ -686,7 +691,10 @@ class FloatingPill(QWidget):
             self._apply_size_targets()  # the wand opens (and closes) as the mouse moves on/off it
             self.update()
         if hover_mic or hover_wand:
-            self.setToolTip(f"Start dictating  ({self.hotkey_label})" if hover_mic else "Choose a transform")
+            self.setToolTip(
+                f"Start dictating  ({self.hotkey_label})" if hover_mic
+                else "Choose a transform" if self._chevron_rect.contains(pos)
+                else "Transform the selected text")
         elif self.state == STATE_IDLE:
             self._update_tooltip()
         clickable = (hover_cancel or hover_finish or hover_mic or hover_wand
@@ -746,8 +754,11 @@ class FloatingPill(QWidget):
         if self._mic_rect.contains(pos):
             self.toggle_dictation_requested.emit()  # the mic button always dictates, whatever "click the pill" is set to
             return
+        if self._chevron_rect.contains(pos):
+            self.transform_menu_requested.emit()   # the arrow: pick which transform the wand uses
+            return
         if self._wand_rect.contains(pos):
-            self.transform_menu_requested.emit()
+            self.transform_apply_requested.emit()  # the wand: transform the selected text now
             return
         if self.click_action == CLICK_DICTATE:
             self.toggle_dictation_requested.emit()
@@ -770,11 +781,11 @@ class FloatingPill(QWidget):
 
     # --- Transform menu --------------------------------------------------------
 
-    def popup_transform_menu(self, items, active_id, auto_apply, on_select, on_auto_toggle, on_configure) -> None:
+    def popup_transform_menu(self, items, active_id, on_select, on_configure) -> None:
         """Open the wand's menu above the pill (below it if there's no room), keeping the pill expanded meanwhile."""
         from src.ui.pill_menu import MENU_W, build_transform_menu
 
-        menu = build_transform_menu(self, items, active_id, auto_apply, on_select, on_auto_toggle, on_configure)
+        menu = build_transform_menu(self, items, active_id, on_select, on_configure)
         self._menu_open = True
         self._apply_size_targets()
         menu.aboutToHide.connect(self._on_menu_closed)

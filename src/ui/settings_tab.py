@@ -473,6 +473,14 @@ class _GeneralSettings(QWidget):
         self.auto_llm_polish_cb.stateChanged.connect(lambda s: engine.set_auto_llm_polish(s != 0))
         v.addWidget(_check_row(self.auto_llm_polish_cb, "Removes filler words, fixes \"wait no\" corrections and formats lists. "
                                                         "Short, clean phrases stay instant. Turn off for rule-based formatting only."))
+        self.dictation_transform_cb = QCheckBox("Also run the chosen transform on every dictation")
+        self.dictation_transform_cb.setChecked(engine.config.dictation_uses_transform)
+        self.dictation_transform_cb.stateChanged.connect(lambda s: engine.set_dictation_uses_transform(s != 0))
+        v.addWidget(_check_row(
+            self.dictation_transform_cb,
+            "Off by default. The pill's wand button transforms text you have SELECTED, on demand. Turn this on only if you want "
+            "everything you dictate to be rewritten by the transform chosen in the wand's arrow menu (Polish = normal dictation).",
+        ))
         self.trim_rambling_cb = QCheckBox("Cut spoken padding (\"and yeah\", \"so yeah\", \"I guess,\")")
         self.trim_rambling_cb.setChecked(engine.config.trim_rambling)
         self.trim_rambling_cb.stateChanged.connect(lambda s: engine.set_trim_rambling(s != 0))

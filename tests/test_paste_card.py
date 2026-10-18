@@ -37,6 +37,24 @@ def test_card_copies_and_shows() -> None:
     logger.success("PASS: Copy copies, close closes, nothing is copied until you choose.")
 
 
+def test_long_text_scrolls() -> None:
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    from src.ui.paste_card import PasteCard
+
+    card = PasteCard()
+    card.show_for("This is a long dictation. " * 60, QPoint(600, 700))
+    assert card._text_metrics()[4] > 0, "the text is taller than the box"
+    event = QWheelEvent(QPointF(100, 100), QPointF(100, 100), QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    card.wheelEvent(event)
+    assert card._scroll > 0, "the mouse wheel scrolls the preview"
+    card.grab()
+    card.hide()
+    logger.success("PASS: a long text scrolls inside the card.")
+
+
 def test_focus_check_fails_open() -> None:
     from src import focus_check
 
@@ -90,6 +108,7 @@ def test_worker_raises_card_only_without_target() -> None:
 
 if __name__ == "__main__":
     test_card_copies_and_shows()
+    test_long_text_scrolls()
     test_focus_check_fails_open()
     test_detection_rules()
     test_worker_raises_card_only_without_target()

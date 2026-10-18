@@ -77,17 +77,26 @@ typing into. It stays tiny while idle and grows only when something happens.
 
 ![The six position presets](docs/images/pill-positions.png)
 
-### Choosing a transform from the pill
+### Transforming text with the pill
 
-Click the wand to open the transform menu (the small arrow appears once the mouse is on the wand):
+Select some text in any app, hover the pill and click the **wand**: the text is rewritten in place with the transform you chose.
+To change which transform the wand uses, click the small **arrow** that appears once the mouse is on the wand:
 
 ![The pill's transform menu](docs/images/pill-menu.png)
 
-- **Auto Apply After Dictation** - when on, every dictation is run through the transform you picked (so "Prompt Engineer" turns
-  what you say into a prompt as you say it). Off means plain cleanup only.
-- The list shows your Transforms-hub entries; the **tick** marks the current one. **Polish** is ordinary dictation.
+- The **wand** transforms the text you have selected. Dictation itself is *not* rewritten unless you turn on
+  *Settings > Writing > "Also run the chosen transform on every dictation"* (off by default).
+- The list shows your Transforms-hub entries; the **tick** marks the current one. **Polish** is plain cleanup.
 - **Configure transforms** opens the Transforms tab in the dashboard to add or edit them.
 - The pill briefly shows `Mode: <name>` when you pick one, and History labels the entry with the transform's name.
+
+### When nothing was pasted
+
+If you finish a dictation while nothing that accepts text has focus (the desktop, a button, a page with nothing selected), a card
+appears above the pill with your text. Press **Copy text** (it turns into a green *Copied!*), scroll long text with the mouse wheel, or
+dismiss it with the round close button. It disappears by itself when you start the next dictation, and it never appears over a chat box or editor.
+
+![The paste card, before and after Copy](docs/images/paste-card.png)
 
 ## Features
 
@@ -113,8 +122,9 @@ real time. Design notes: [LIVE_TRANSCRIPTION_ARCHITECTURE.md](LIVE_TRANSCRIPTION
 
 ### Transforms
 Re-write dictated or highlighted text with one hotkey each: **Polish**, **Prompt
-Engineer**, **Detailed Code Fix Prompt**, **Grammar Correct**, **AI Relay**, plus your own
-custom prompts. Highlight text and press a transform's hotkey to polish it in place.
+Engineer**, **Detailed Code Fix Prompt**, **Grammar Correct**, **AI Relay**, four **tone** transforms
+(**Polite**, **Professional**, **Casual**, **Concise**; swear words are always removed in a tone rewrite), plus your own
+custom prompts. Highlight text and press a transform's hotkey - or click the pill's wand - to rewrite it in place.
 
 ![Transforms](docs/images/transforms.png)
 
@@ -241,7 +251,7 @@ Every shortcut can be changed in Settings.
 
 ## Install
 
-**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.5.3` file from the
+**From a release (recommended).** Download *every* `WispernoPro-Setup-v1.6.0` file from the
 release into **one folder** - the small `.exe` and the three numbered `.bin` parts (about 4.9 GB
 in total; the installer uses disk spanning, so it reads the parts from beside itself) - then run the
 `.exe`. It upgrades an existing Wisperno Pro in place, keeping your settings, history and dictionary,
@@ -273,6 +283,7 @@ this README (with made-up demo data, never your own history): `python scripts/ca
 
 | Version | Highlights |
 |---|---|
+| **1.6.0** | The pill's **wand button now transforms the text you have selected** (the arrow beside it chooses which transform); dictation is no longer rewritten automatically unless you switch that on in Settings > Writing. The "no text field" card **scrolls** long text, is **hidden when you start the next dictation**, and README screenshots are refreshed (History icon buttons, tone transforms, paste card). |
 | **1.5.3** | Whisper's dash-bleeped swear words ("f-ing", "f-", "sh-t") are restored like the asterisk ones. Tone transforms always remove swear words and re-ask once if the model hands the text back unchanged. The "no text field" card also fires when a browser/Electron **Group / pane / label** has focus. The Graphics-memory gauge no longer drops to 0 when the driver reports 0 (it re-opens NVML and never shows less than this app's own VRAM) and refreshes the moment the tab opens. |
 | **1.5.2** | The "no text field" card now works inside **browsers and Electron apps**: a page with nothing focused (read-only document) raises the card, a focused input does not (measured against real Edge pages). |
 | **1.5.1** | Launching the app again (double-clicking its icon while it is already running in the tray) now **opens the dashboard** instead of only flashing the pill. Diagnostics for the "no text field" check (`WispernoPro.exe --probe-focus`). |
@@ -393,7 +404,7 @@ runtimes - full credit belongs to them:
 
 ## License
 
-Wisperno's own code is [MIT](LICENSE) - v1.5.3. The third-party models and
+Wisperno's own code is [MIT](LICENSE) - v1.6.0. The third-party models and
 runtimes above keep their own licenses; see each project for terms,
 particularly Meta's Llama 3.2 Community License if you redistribute a build
 that bundles the Llama-3.2 fallback weights.

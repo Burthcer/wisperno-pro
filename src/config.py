@@ -235,10 +235,10 @@ class AppConfig(BaseModel):
         default="polish",
         description="The transform picked in the pill's wand menu (a Transforms-hub id). 'polish' is ordinary dictation.",
     )
-    auto_apply_transform: bool = Field(
-        default=True,
-        description="'Auto Apply After Dictation' in the pill's wand menu: run the picked transform on every dictation. "
-                    "Off = dictation gets the normal cleanup only.",
+    dictation_uses_transform: bool = Field(
+        default=False,
+        description="Settings -> Writing: also run the pill's chosen transform on every dictation. Off by default - "
+                    "the pill's wand button transforms SELECTED text on demand instead.",
     )
     trim_rambling: bool = Field(
         default=True,

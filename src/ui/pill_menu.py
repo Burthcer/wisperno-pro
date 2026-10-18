@@ -1,8 +1,6 @@
 """
 The transform menu that opens from the floating pill's wand button:
 
-    Auto Apply After Dictation          [switch]
-    ------------------------------------------
     Polish                                  (tick)
     Prompt Engineer
     Detailed Code Fix Prompt
@@ -98,53 +96,6 @@ class _Row(QWidget):
                        QPointF(c.x() + 8.2 * math.cos(a), c.y() + 8.2 * math.sin(a)))
 
 
-class _SwitchRow(QWidget):
-    """"Auto Apply After Dictation" + an on/off switch."""
-
-    def __init__(self, text: str, checked: bool, on_toggled: Callable[[bool], None]):
-        super().__init__()
-        self._text, self._checked, self._on_toggled = text, checked, on_toggled
-        self._hover = False
-        self.setFixedSize(MENU_W - 12, ROW_H)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def isChecked(self) -> bool:
-        return self._checked
-
-    def enterEvent(self, event) -> None:
-        self._hover = True
-        self.update()
-
-    def leaveEvent(self, event) -> None:
-        self._hover = False
-        self.update()
-
-    def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._checked = not self._checked
-            self._on_toggled(self._checked)
-            self.update()  # the menu stays open so you see it flip
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        if self._hover:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(theme.PILL_BUTTON_HOVER))
-            p.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 9, 9)
-        p.setPen(QColor(theme.PILL_TEXT_PRIMARY))
-        p.setFont(_font(QFont.Weight.DemiBold))
-        p.drawText(QRectF(14, 0, self.width() - 80, self.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._text)
-        track = QRectF(self.width() - 52.0, (self.height() - 20.0) / 2.0, 38.0, 20.0)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(theme.PILL_ACCENT if self._checked else theme.PILL_BUTTON))
-        p.drawRoundedRect(track, 10, 10)
-        thumb_x = track.right() - 17.0 if self._checked else track.left() + 3.0
-        p.setBrush(QColor(theme.PILL_ON_ACCENT if self._checked else theme.PILL_TEXT_PRIMARY))
-        p.drawEllipse(QRectF(thumb_x, track.top() + 3.0, 14.0, 14.0))
-        p.end()
-
-
 class _Divider(QWidget):
     def __init__(self):
         super().__init__()
@@ -161,12 +112,10 @@ def build_transform_menu(
     parent: Optional[QWidget],
     items: List[Tuple[str, str]],
     active_id: str,
-    auto_apply: bool,
     on_select: Callable[[str], None],
-    on_auto_toggle: Callable[[bool], None],
     on_configure: Callable[[], None],
 ) -> QMenu:
-    """`items` is [(transform id, title), ...]. Selecting a transform closes the menu; the switch leaves it open."""
+    """`items` is [(transform id, title), ...]. Picking one makes it the pill's wand transform and closes the menu."""
     menu = QMenu(parent)
     menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
     menu.setWindowFlags(menu.windowFlags() | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
@@ -179,8 +128,6 @@ def build_transform_menu(
         action.setDefaultWidget(widget)
         menu.addAction(action)
 
-    add(_SwitchRow("Auto Apply After Dictation", auto_apply, on_auto_toggle))
-    add(_Divider())
     for transform_id, title in items:
         add(_Row(title, lambda t=transform_id: (on_select(t), menu.close()), checked=(transform_id == active_id)))
     add(_Divider())

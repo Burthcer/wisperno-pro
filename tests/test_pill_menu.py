@@ -58,54 +58,60 @@ def test_hover_shows_mic_and_wand_and_they_work() -> None:
     assert not pill._mic_rect.isEmpty() and not pill._wand_rect.isEmpty()
     assert pill._mic_rect.right() < pill._wand_rect.left() and pill._wand_rect.right() <= pill.width()
     got = _collect(pill)
-    menu_requests = []
+    menu_requests, apply_requests = [], []
     pill.transform_menu_requested.connect(lambda: menu_requests.append(1))
+    pill.transform_apply_requested.connect(lambda: apply_requests.append(1))
 
     _click(pill, pill._mic_rect.center())
-    assert got["toggle"] == 1 and not menu_requests, "mic = start dictating"
+    assert got["toggle"] == 1 and not menu_requests and not apply_requests, "mic = start dictating"
     _click(pill, pill._wand_rect.center())
-    assert menu_requests == [1] and got["toggle"] == 1, "wand = open the transform menu"
+    assert apply_requests == [1] and not menu_requests, "the wand = transform the selected text"
+    # hovering the wand opens it and reveals the arrow; the arrow opens the menu instead
+    pill._hover_wand = True
+    pill._apply_size_targets()
+    pill._width_current, pill._height_current = pill._width_target, pill._height_target
+    pill.resize(int(pill._width_current), int(pill._height_current))
+    pill.grab()
+    assert not pill._chevron_rect.isEmpty()
+    _click(pill, pill._chevron_rect.center())
+    assert menu_requests == [1] and apply_requests == [1], "the arrow = choose the transform"
     _click(pill, QPointF(pill.width() - 1.0, 1.0))  # a gap: falls back to the 'click does nothing' setting
-    assert got["toggle"] == 1 and menu_requests == [1]
+    assert got["toggle"] == 1 and menu_requests == [1] and apply_requests == [1]
     pill.close()
-    logger.success("PASS: hover grows the pill to mic + wand; mic dictates, wand opens the menu, gaps obey the click setting.")
+    logger.success("PASS: hover grows the pill; mic dictates, wand transforms, the arrow opens the menu, gaps obey the click setting.")
 
 
 def test_menu_rows_do_what_they_say() -> None:
     from PySide6.QtWidgets import QWidgetAction
 
-    from src.ui.pill_menu import _Row, _SwitchRow, build_transform_menu
+    from src.ui.pill_menu import _Row, build_transform_menu
 
     logger.info("--- Testing the transform menu ---")
-    picked, toggles, configured = [], [], []
+    picked, configured = [], []
     items = [("polish", "Polish"), ("prompt_engineer", "Prompt Engineer"), ("code_fix", "Detailed Code Fix Prompt")]
-    menu = build_transform_menu(None, items, "prompt_engineer", False, picked.append, toggles.append, lambda: configured.append(1))
+    menu = build_transform_menu(None, items, "prompt_engineer", picked.append, lambda: configured.append(1))
     widgets = [a.defaultWidget() for a in menu.actions() if isinstance(a, QWidgetAction)]
-    switch = next(w for w in widgets if isinstance(w, _SwitchRow))
     rows = [w for w in widgets if isinstance(w, _Row)]
     assert [r._text for r in rows] == ["Polish", "Prompt Engineer", "Detailed Code Fix Prompt", "Configure transforms"]
     assert [r._checked for r in rows[:3]] == [False, True, False], "the current transform has the tick"
-    assert switch.isChecked() is False
 
     menu.popup(menu.pos())
     APP.processEvents()
-    QTest.mouseClick(switch, __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.MouseButton.LeftButton)
-    assert toggles == [True] and switch.isChecked() and menu.isVisible(), "the switch flips and the menu stays open"
     QTest.mouseClick(rows[2], __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.MouseButton.LeftButton)
     assert picked == ["code_fix"] and not menu.isVisible(), "picking a transform selects it and closes the menu"
 
-    menu2 = build_transform_menu(None, items, "polish", True, picked.append, toggles.append, lambda: configured.append(1))
+    menu2 = build_transform_menu(None, items, "polish", picked.append, lambda: configured.append(1))
     cfg = [a.defaultWidget() for a in menu2.actions() if isinstance(a, QWidgetAction) and isinstance(a.defaultWidget(), _Row)][-1]
     menu2.popup(menu2.pos())
     QTest.mouseClick(cfg, __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.MouseButton.LeftButton)
     assert configured == [1] and not menu2.isVisible()
-    logger.success("PASS: tick on the current transform; switch stays open; picking and Configure close the menu.")
+    logger.success("PASS: tick on the current transform; picking and Configure close the menu.")
 
 
 def test_pill_popup_keeps_itself_expanded_and_collapses_after() -> None:
     logger.info("--- Testing the pill while its menu is open ---")
     pill = _hovered_pill()
-    pill.popup_transform_menu([("polish", "Polish")], "polish", True, lambda t: None, lambda b: None, lambda: None)
+    pill.popup_transform_menu([("polish", "Polish")], "polish", lambda t: None, lambda: None)
     assert pill._menu_open
     pill._hover = False  # the mouse moved onto the menu
     pill._apply_size_targets()
@@ -121,7 +127,7 @@ def _engine_with_transforms():
     from test_pill_interaction import _engine
 
     engine, states, _ = _engine()
-    engine.config.active_transform, engine.config.auto_apply_transform = "polish", True
+    engine.config.active_transform, engine.config.dictation_uses_transform = "polish", True
     engine.db = mock.Mock()
     rows = {"prompt_engineer": {"id": "prompt_engineer", "title": "Prompt Engineer", "system_prompt": "PROMPT!", "is_active": 1},
             "off": {"id": "off", "title": "Off", "system_prompt": "x", "is_active": 0}}
@@ -140,9 +146,9 @@ def test_engine_applies_the_picked_transform() -> None:
     engine.set_active_transform("prompt_engineer")
     assert engine.config.active_transform == "prompt_engineer" and engine.save_config.called
     assert engine._auto_apply_transform()["title"] == "Prompt Engineer"
-    engine.set_auto_apply_transform(False)
-    assert engine._auto_apply_transform() is None, "Auto Apply off: dictation gets the normal cleanup"
-    engine.set_auto_apply_transform(True)
+    engine.set_dictation_uses_transform(False)
+    assert engine._auto_apply_transform() is None, "setting off (the default): dictation gets the normal cleanup"
+    engine.set_dictation_uses_transform(True)
     engine.set_active_transform("off")
     assert engine._auto_apply_transform() is None, "a transform you switched off is never applied"
     engine.set_active_transform("deleted-long-ago")
@@ -173,11 +179,38 @@ def test_engine_applies_the_picked_transform() -> None:
     logger.success("PASS: the picked transform runs on dictation with its own prompt; Polish / Auto Apply off stay ordinary.")
 
 
+def test_wand_transforms_the_selection_with_the_chosen_transform() -> None:
+    logger.info("--- Testing the wand applies the chosen transform to the selected text ---")
+    engine = _engine_with_transforms()
+    engine._engines_ready, engine._processing, engine._live_worker = True, False, None
+    engine._is_releasing = lambda: False
+    engine.set_active_transform("prompt_engineer")
+    captured = {}
+
+    class FakeSelectionWorker:
+        def __init__(self, injector, transformer, db, mode, system_prompt=None):
+            captured["mode"], captured["prompt"] = mode, system_prompt
+            for name in ("state_changed", "result_ready", "finished"):
+                setattr(self, name, mock.MagicMock())
+
+        def start(self):
+            captured["started"] = True
+
+    with mock.patch("src.engine.SelectionPolishWorker", FakeSelectionWorker):
+        engine.apply_transform_to_selection()
+    assert captured == {"mode": "prompt_engineer", "prompt": "PROMPT!", "started": True}, captured
+    assert engine._processing is True
+    logger.success("PASS: the wand runs the chosen transform on the selection (and dictation is NOT auto-transformed by default).")
+    from src.config import AppConfig
+    assert AppConfig().dictation_uses_transform is False
+
+
 def run_all_tests() -> None:
     test_hover_shows_mic_and_wand_and_they_work()
     test_menu_rows_do_what_they_say()
     test_pill_popup_keeps_itself_expanded_and_collapses_after()
     test_engine_applies_the_picked_transform()
+    test_wand_transforms_the_selection_with_the_chosen_transform()
     logger.success("ALL PILL MENU TESTS PASSED")
 
 

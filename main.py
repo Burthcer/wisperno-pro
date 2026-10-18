@@ -177,6 +177,7 @@ class WispernoApp:
         self.writing_styles_window.dismissed.connect(self.engine.dismiss_writing_styles)
         self.paste_card = PasteCard()
         self.engine.paste_missed.connect(self.show_paste_card)
+        self.engine.state_changed.connect(lambda s: self.paste_card.hide() if s in ("recording", "mic_starting") else None)  # a new dictation clears the old card
         self.engine.writing_styles_no_selection.connect(lambda: self.pill.set_state("no_selection"))
         self.engine.writing_styles_selection_ready.connect(self.writing_styles_window.show_selection)
         self.engine.writing_styles_style_ready.connect(self.writing_styles_window.set_style_ready)
@@ -200,6 +201,7 @@ class WispernoApp:
         self.pill.position_changed.connect(self.engine.set_pill_position)
         self.pill.position_reset_requested.connect(self.reset_pill_position)
         self.pill.transform_menu_requested.connect(self.show_pill_transform_menu)
+        self.pill.transform_apply_requested.connect(self.apply_pill_transform)
         self.pill.quit_requested.connect(self.shutdown_application)
 
         self._shutting_down = False
@@ -295,11 +297,14 @@ class WispernoApp:
         config = self.engine.config
         items = [(row["id"], row["title"]) for row in self.engine.db.list_transforms(active_only=True)]
         self.pill.popup_transform_menu(
-            items, config.active_transform, config.auto_apply_transform,
+            items, config.active_transform,
             on_select=self.select_pill_transform,
-            on_auto_toggle=self.engine.set_auto_apply_transform,
             on_configure=self.open_transforms,
         )
+
+    def apply_pill_transform(self) -> None:
+        """The wand: transform the text selected in the active app with the transform chosen in the arrow's menu."""
+        self.engine.apply_transform_to_selection()
 
     def select_pill_transform(self, transform_id: str) -> None:
         self.engine.set_active_transform(transform_id)
