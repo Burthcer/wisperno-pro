@@ -46,10 +46,55 @@ def _seed(engine) -> None:
             pass
 
 
+def _hd(widget, scale: int = 3, transparent: bool = True):
+    """Render a widget at `scale`x with the painter scaled (vector quality, not an upscaled bitmap).
+    Transparent background by default so rounded shapes blend into any page colour."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+
+    pix = QPixmap(widget.width() * scale, widget.height() * scale)
+    pix.fill(Qt.GlobalColor.transparent if transparent else QColor("black"))
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    painter.scale(scale, scale)
+    from PySide6.QtCore import QPoint
+    widget.render(painter, QPoint(0, 0))
+    painter.end()
+    return pix
+
+
 def _save(widget, name: str) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    widget.grab().save(str(OUT / name))
+    _hd(widget, 2, transparent=False).save(str(OUT / name))  # dashboards: 2x, opaque
     print("saved", name)
+
+
+def _compose(parts, pad: int = 36, gap: int = 36, vertical: bool = False, labels=None):
+    """Lay transparent images out in a row/column on a transparent canvas."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap, QPainter
+
+    if vertical:
+        width = max(i.width() for i in parts) + 2 * pad
+        height = sum(i.height() for i in parts) + gap * (len(parts) - 1) + 2 * pad
+    else:
+        width = sum(i.width() for i in parts) + gap * (len(parts) - 1) + 2 * pad
+        height = max(i.height() for i in parts) + 2 * pad
+    sheet = QPixmap(width, height)
+    sheet.fill(Qt.GlobalColor.transparent)
+    q = QPainter(sheet)
+    x = y = pad
+    for img in parts:
+        if vertical:
+            q.drawPixmap((width - img.width()) // 2, y, img)
+            y += img.height() + gap
+        else:
+            q.drawPixmap(x, (height - img.height()) // 2, img)
+            x += img.width() + gap
+    q.end()
+    return sheet
 
 
 def _demo_usage(engine) -> None:
@@ -123,97 +168,6 @@ def dashboard_shots() -> None:
         win.close()
 
 
-def pill_shots() -> None:
-    from PySide6.QtCore import QRectF, Qt
-    from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
-    from PySide6.QtWidgets import QApplication
-    from src.ui import theme
-    from src.ui.floating_pill import FloatingPill
-
-    app = QApplication.instance() or QApplication([])
-    theme.load_fonts()
-    states = [("Idle", "idle"), ("Starting", "loading"), ("Recording", "recording:POLISH"), ("Processing", "processing"), ("Done", "success"), ("Mode change", "mode_changed")]
-    import math
-    rows = []
-    for shape in ("pill", "box"):
-        row = []
-        for label, state in states:
-            p = FloatingPill(shape=shape)
-            p.set_state(state)
-            p._width_current, p._height_current = p._width_target, p._height_target
-            p.resize(int(p._width_current), int(p._height_current))
-            if state.startswith("recording"):
-                for i in range(90):
-                    p.set_level(0.005 + 0.05 * abs(math.sin(i * 0.35)) * (1 if i % 7 else 0.3))
-                    p._tick()
-            row.append((label, p.grab()))
-            p.close()
-        rows.append((shape, row))
-    scale, pad, label_h = 3, 24, 22
-    col_w = max(img.width() for _, r in rows for _, img in r) + pad
-    width = col_w * len(states) + pad + 110
-    height = (30 + label_h + pad) * len(rows) + 40
-    sheet = QPixmap(width * scale // 3, height)
-    sheet.fill(QColor(theme.BG_APP))
-    q = QPainter(sheet)
-    q.setPen(QColor(theme.TEXT_SECONDARY))
-    font = QFont("Inter Tight"); font.setPointSize(9); q.setFont(font)
-    y = 20
-    for shape, row in rows:
-        q.drawText(10, y + 28, "Pill" if shape == "pill" else "Box")
-        for i, (label, img) in enumerate(row):
-            x = 110 + i * col_w
-            q.drawPixmap(x + (col_w - img.width()) // 2, y + 8, img)
-            q.drawText(QRectF(x, y + 8 + 30 + 4, col_w, 20), Qt.AlignmentFlag.AlignCenter, label)
-        y += 30 + label_h + pad
-    q.end()
-    sheet = sheet.scaled(sheet.width() * 2, sheet.height() * 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-    OUT.mkdir(parents=True, exist_ok=True)
-    sheet.save(str(OUT / "pill-states.png"))
-    print("saved pill-states.png")
-
-
-def pill_menu_shot() -> None:
-    """The hovered pill (mic + transform buttons) with its transform menu open."""
-    from PySide6.QtCore import QPoint, Qt
-    from PySide6.QtGui import QColor, QPainter, QPixmap
-    from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication
-    from src.ui import theme
-    from src.ui.floating_pill import FloatingPill
-    from src.ui.pill_menu import build_transform_menu
-
-    app = QApplication.instance() or QApplication([])
-    theme.load_fonts()
-    pill = FloatingPill()
-    pill.set_state("idle")
-    pill._hover = pill._hover_wand = True
-    pill._apply_size_targets()
-    pill._width_current, pill._height_current = pill._width_target, pill._height_target
-    pill.resize(int(pill._width_current), int(pill._height_current))
-    QTest.qWait(60)
-    pill_img = pill.grab().scaled(pill.width() * 3, pill.height() * 3, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-    pill.close()
-    items = [("polish", "Polish"), ("prompt_engineer", "Prompt Engineer"), ("code_fix", "Detailed Code Fix Prompt"),
-             ("grammar_correct", "Grammar Correct"), ("tone_polite", "Polite"), ("tone_professional", "Professional"),
-             ("tone_casual", "Casual"), ("tone_concise", "Concise")]
-    menu = build_transform_menu(None, items, "polish", lambda t: None, lambda: None)
-    menu.popup(QPoint(0, 0))
-    QTest.qWait(200)
-    menu_img = menu.grab()
-    menu.close()
-    pad = 28
-    sheet = QPixmap(max(menu_img.width(), pill_img.width()) + 2 * pad, menu_img.height() + pill_img.height() + 3 * pad)
-    sheet.fill(QColor(theme.BG_APP))
-    q = QPainter(sheet)
-    q.drawPixmap(pad, pad, menu_img)
-    q.drawPixmap(pad + (menu_img.width() - pill_img.width()) // 2, 2 * pad + menu_img.height(), pill_img)
-    q.end()
-    OUT.mkdir(parents=True, exist_ok=True)
-    sheet.save(str(OUT / "pill-menu.png"))
-    print("saved pill-menu.png")
-
-
 def position_preset_diagram() -> None:
     from PySide6.QtCore import QRectF, Qt
     from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
@@ -223,9 +177,10 @@ def position_preset_diagram() -> None:
     app = QApplication.instance() or QApplication([])
     theme.load_fonts()
     w, h, m = 640, 380, 28
-    pm = QPixmap(w + 2 * m, h + 2 * m)
-    pm.fill(QColor(theme.BG_APP))
+    pm = QPixmap((w + 2 * m) * 3, (h + 2 * m) * 3)
+    pm.fill(Qt.GlobalColor.transparent)
     q = QPainter(pm)
+    q.scale(3, 3)
     q.setRenderHint(QPainter.RenderHint.Antialiasing)
     q.setPen(QPen(QColor(theme.BORDER_STRONG), 2))
     q.setBrush(QColor(theme.BG_CARD))
@@ -246,38 +201,6 @@ def position_preset_diagram() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     pm.save(str(OUT / "pill-positions.png"))
     print("saved pill-positions.png")
-
-
-def paste_card_shot() -> None:
-    """The 'No active text field detected' card (demo text only), before and after pressing Copy."""
-    from PySide6.QtCore import QPoint
-    from PySide6.QtGui import QColor, QPainter, QPixmap
-    from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication
-    from src.ui import theme
-    from src.ui.paste_card import PasteCard
-
-    app = QApplication.instance() or QApplication([])
-    theme.load_fonts()
-    card = PasteCard()
-    card.show_for("Send the quarterly numbers to Priya by Friday, and cc the finance team. "
-                  "Also remind everyone that the installer is ready for testing.", QPoint(900, 800))
-    QTest.qWait(120)
-    before = card.grab()
-    card._copy()
-    QTest.qWait(400)
-    after = card.grab()
-    card.close()
-    pad = 24
-    sheet = QPixmap(before.width() * 2 + 3 * pad, before.height() + 2 * pad)
-    sheet.fill(QColor(theme.BG_APP))
-    q = QPainter(sheet)
-    q.drawPixmap(pad, pad, before)
-    q.drawPixmap(2 * pad + before.width(), pad, after)
-    q.end()
-    OUT.mkdir(parents=True, exist_ok=True)
-    sheet.save(str(OUT / "paste-card.png"))
-    print("saved paste-card.png")
 
 
 def extra_window_shots() -> None:
@@ -317,58 +240,120 @@ def extra_window_shots() -> None:
     live.set_speculative_text("First, the installer is ready for")
     live.show()
     QTest.qWait(400)
-    _save(live, "live-transcription.png")
+    _hd(live, 3).save(str(OUT / "live-transcription.png"))
     live.close()
 
     # --- The pill when hovered: resting strip, mic + wand, wand open (arrow shown)
-    def pill_image(hover: bool, wand: bool):
-        pill = FloatingPill()
-        pill.set_state("idle")
-        pill._hover, pill._hover_wand = hover, wand
-        pill._apply_size_targets()
-        pill._width_current, pill._height_current = pill._width_target, pill._height_target
-        pill.resize(int(pill._width_current), int(pill._height_current))
-        QTest.qWait(60)
-        img = pill.grab().scaled(pill.width() * 3, pill.height() * 3, Qt.AspectRatioMode.KeepAspectRatio,
-                                 Qt.TransformationMode.SmoothTransformation)
-        pill.close()
-        return img
-
-    images = [pill_image(False, False), pill_image(True, False), pill_image(True, True)]
-    pad = 26
-    sheet = QPixmap(sum(i.width() for i in images) + pad * 4, max(i.height() for i in images) + pad * 2)
-    sheet.fill(QColor(theme.BG_APP))
-    q = QPainter(sheet)
-    x = pad
-    for img in images:
-        q.drawPixmap(x, (sheet.height() - img.height()) // 2, img)
-        x += img.width() + pad
-    q.end()
-    sheet.save(str(OUT / "pill-hover.png"))
+    _compose([_pill("idle"), _pill("idle", hover=True), _pill("idle", hover=True, wand=True)], pad=20, gap=50).save(
+        str(OUT / "pill-hover.png"))
     print("saved pill-hover.png")
 
 
+def _pill(state: str = "idle", hover: bool = False, wand: bool = False, shape: str = "pill"):
+    import math
+    from PySide6.QtTest import QTest
+    from src.ui.floating_pill import FloatingPill
+
+    p = FloatingPill(shape=shape)
+    p.set_state(state)
+    p._hover, p._hover_wand = hover, wand
+    p._apply_size_targets()
+    p._width_current, p._height_current = p._width_target, p._height_target
+    p.resize(int(p._width_current), int(p._height_current))
+    if state.startswith("recording"):
+        for i in range(90):
+            p.set_level(0.005 + 0.05 * abs(math.sin(i * 0.35)) * (1 if i % 7 else 0.3))
+            p._tick()
+    QTest.qWait(40)
+    img = _hd(p, 4)
+    p.close()
+    return img
+
+
+def pill_shots() -> None:
+    """Every pill state, crisp and transparent: two rows (Pill shape, Box shape)."""
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    states = ["idle", "loading", "recording:POLISH", "processing", "success", "mode_changed"]
+    rows = [_compose([_pill(st, shape=shape) for st in states], pad=20, gap=40) for shape in ("pill", "box")]
+    sheet = _compose(rows, pad=10, gap=24, vertical=True)
+    OUT.mkdir(parents=True, exist_ok=True)
+    sheet.save(str(OUT / "pill-states.png"))
+    print("saved pill-states.png")
+
+
+def pill_menu_shot() -> None:
+    """The wand open (arrow shown) with the transform menu above it."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+    from src.ui.pill_menu import build_transform_menu
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    items = [("polish", "Polish"), ("prompt_engineer", "Prompt Engineer"), ("code_fix", "Detailed Code Fix Prompt"),
+             ("grammar_correct", "Grammar Correct"), ("tone_polite", "Polite"), ("tone_professional", "Professional"),
+             ("tone_casual", "Casual"), ("tone_concise", "Concise")]
+    menu = build_transform_menu(None, items, "polish", lambda t: None, lambda: None)
+    menu.popup(QPoint(0, 0))
+    QTest.qWait(200)
+    menu_img = _hd(menu, 3)
+    menu.close()
+    sheet = _compose([menu_img, _pill("idle", hover=True, wand=True)], vertical=True, gap=28, pad=20)
+    OUT.mkdir(parents=True, exist_ok=True)
+    sheet.save(str(OUT / "pill-menu.png"))
+    print("saved pill-menu.png")
+
+
+def paste_card_shot() -> None:
+    """The 'No active text field detected' card (demo text only), before and after pressing Copy."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from src.ui import theme
+    from src.ui.paste_card import PasteCard
+
+    app = QApplication.instance() or QApplication([])
+    theme.load_fonts()
+    card = PasteCard()
+    card.show_for("Send the quarterly numbers to Priya by Friday, and cc the finance team. "
+                  "Also remind everyone that the installer is ready for testing.", QPoint(900, 800))
+    QTest.qWait(120)
+    before = _hd(card, 3)
+    card._copy()
+    QTest.qWait(400)
+    after = _hd(card, 3)
+    card.close()
+    before.save(str(OUT / "paste-card-single.png"))
+    _compose([before, after], pad=16, gap=36).save(str(OUT / "paste-card.png"))
+    print("saved paste-card.png")
+
+
 def hero_image() -> None:
-    """The README header picture: the dashboard with the pill and the paste card laid over it."""
-    from PySide6.QtCore import QRectF, Qt
+    """The README header: the dashboard with the pill and the paste card laid over it (all crisp)."""
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPainter, QPixmap
     from src.ui import theme
 
     dash = QPixmap(str(OUT / "history.png"))
-    pill = QPixmap(str(OUT / "pill-hover.png"))
-    card = QPixmap(str(OUT / "paste-card.png"))
-    card = card.copy(24, 24, 372, 218)  # exactly the card (before Copy), without the sheet's background
-    w, h = dash.width() + 80, dash.height() + 80
-    canvas = QPixmap(w, h)
+    pill = _compose([_pill("idle", hover=True), _pill("idle", hover=True, wand=True)], pad=0, gap=40)
+    card = QPixmap(str(OUT / "paste-card-single.png"))
+    pad = 60
+    canvas = QPixmap(dash.width() + 2 * pad, dash.height() + 2 * pad)
     canvas.fill(QColor(theme.BG_APP))
     q = QPainter(canvas)
-    q.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     q.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-    q.drawPixmap(40, 40, dash)
-    pill_small = pill.scaledToWidth(int(w * 0.34), Qt.TransformationMode.SmoothTransformation)
-    q.drawPixmap(w - pill_small.width() - 60, h - pill_small.height() - 40, pill_small)
-    card_small = card.scaledToWidth(int(w * 0.30), Qt.TransformationMode.SmoothTransformation)
-    q.drawPixmap(w - card_small.width() - 60, h - pill_small.height() - card_small.height() - 56, card_small)
+    q.drawPixmap(pad, pad, dash)
+    pill_small = pill.scaledToWidth(int(canvas.width() * 0.30), Qt.TransformationMode.SmoothTransformation)
+    card_small = card.scaledToWidth(int(canvas.width() * 0.27), Qt.TransformationMode.SmoothTransformation)
+    px = canvas.width() - pill_small.width() - pad
+    py = canvas.height() - pill_small.height() - pad // 2
+    q.drawPixmap(px, py, pill_small)
+    q.drawPixmap(canvas.width() - card_small.width() - pad, py - card_small.height() - 30, card_small)
     q.end()
     canvas.save(str(OUT / "hero.png"))
     print("saved hero.png")
