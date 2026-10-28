@@ -33,7 +33,7 @@ Measured on the target hardware (RTX 4070 Laptop GPU, 8 GB) with `tests/benchmar
 | Preset | Model | VRAM | System RAM | Decode speed | 100-word latency | Fidelity |
 |---|---|---|---|---|---|---|
 | **Turbo Flagship** (default) | Qwen2.5-1.5B-Instruct Q8_0 | 3,491 MB | 2,311 MB | **113.8 tok/s** | 0.82 s | 97.6% |
-| Standard | Llama-3.2-3B | 3,691 MB | 2,559 MB | 91.7 tok/s | 1.04 s | 98.8% |
+| Standard | Qwen2.5-3B-Instruct Q4_K_M | 3,691 MB | 2,559 MB | 91.7 tok/s | 1.04 s | 98.8% |
 
 The 0.82 s is from an earlier run. On the same-GPU comparison in
 BENCHMARKS.md, Wisperno Pro measures 0.85 s.
@@ -90,7 +90,7 @@ Always run the full test suite through `tests/run_all.py`: several tests open th
 
 ## Credits and third-party models
 
-Speech recognition: [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) with the `large-v3-turbo` weights. Cleanup: `Qwen2.5-1.5B-Instruct` (Apache-2.0) and `Llama-3.2-3B`, run through `llama-cpp-python`. UI: PySide6 (Qt). Fonts: Inter Tight and JetBrains Mono (bundled). See [LICENSE](LICENSE); the model licenses apply to the model files.
+Speech recognition: [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) with the `large-v3-turbo` weights. Cleanup: `Qwen2.5-1.5B-Instruct` (Apache-2.0), `Qwen2.5-3B-Instruct`, and `Llama-3.2-3B` as a fallback, run through `llama-cpp-python`. UI: PySide6 (Qt). Fonts: Inter Tight and JetBrains Mono (bundled). See [LICENSE](LICENSE); the model licenses apply to the model files.
 
 ## License
 

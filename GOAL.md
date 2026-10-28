@@ -1,3 +1,5 @@
+> Note: this is the original design goal. The models in use today are in [ADVANCED.md](ADVANCED.md) and [models/MODELS.md](models/MODELS.md).
+
 # GOAL.md - Wisperno: Offline Desktop Dictation Engine ("Wispr Flow Clone")
 
 ## 1. Project Mission
