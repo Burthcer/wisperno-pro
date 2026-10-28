@@ -12,6 +12,9 @@ Windows and any other app on the GPU, not just Wisperno.
 | **Turbo Flagship (default)** | 3491 MB | 2311 MB | **113.8 tok/s** | 0.82s | 97.6% |
 | Standard (Q4_K_M, 3B) | 3691 MB | 2559 MB | 91.7 tok/s | 1.04s | 98.8% |
 
+The 0.82 s here is from the earlier 2026-09-09 run. On the same-GPU
+comparison below, Wisperno Pro measures 0.85 s and Wisperno 0.82 s.
+
 "Fidelity" on Turbo is measured on raw model output and bypasses the
 app's own guardrail (`sanity_check()`) by design - real usage always goes
 through it, which is why the conversational-trap suite (adversarial prompts

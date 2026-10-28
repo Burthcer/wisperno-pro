@@ -46,3 +46,9 @@ Whichever preset you use, `config/config.yaml`'s `model_preset` /
 `llm.model_path` must point at the matching filename - switch presets from
 the app's own Settings screen rather than hand-editing this if you're not
 sure, and it will tell you what to download.
+
+## Licences
+
+These model files are not part of Wisperno Pro and are not MIT.
+Each keeps its own licence. Check the licence on each model's
+Hugging Face page before you use or share it.
