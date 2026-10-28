@@ -739,7 +739,7 @@ class WispernoDB:
         with self._cursor() as cur:
             cur.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)", (key, value))
 
-    # --- Transforms (Wispr Flow "Transforms" hub) -----------------------------
+    # --- Transforms (the Transforms hub) -----------------------------
 
     def list_transforms(self, active_only: bool = False) -> List[Dict[str, Any]]:
         with self._cursor() as cur:

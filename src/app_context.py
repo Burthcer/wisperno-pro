@@ -1,6 +1,6 @@
 """
 Per-app dictation styles: the same words are formatted a little differently
-depending on which app they're typed into, the way Wispr Flow adapts to the
+depending on which app they're typed into, adapting to the
 app you're in.
 
   default    - normal sentences: capitalized, final period, trailing space

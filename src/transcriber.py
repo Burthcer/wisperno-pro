@@ -45,7 +45,7 @@ CHUNK_MIN_SILENCE_MS = 300
 # chunk boundary still reads coherently instead of two disconnected halves.
 CHUNK_CONTEXT_WORDS = 15
 CHUNK_CONTEXT_TOKENS = 30  # prompt room reserved for those words
-# Wispr Flow-style paragraph breaks: a mid-dictation pause at least this long
+# Paragraph breaks: a mid-dictation pause at least this long
 # between two Whisper segments starts a new paragraph ("\n\n") instead of
 # just continuing the sentence with a space - the natural-pause range a user
 # actually stops and resumes a new thought in, per real dictation behavior.
@@ -378,7 +378,7 @@ class Transcriber:
         )
         # Join words with "\n\n" across a real mid-dictation pause (>=
         # PARAGRAPH_PAUSE_SEC) instead of the word's own natural leading
-        # space - Wispr Flow-style paragraph breaks.
+        # space - paragraph breaks.
         parts: List[str] = []
         prev_end: Optional[float] = None
         for seg in segments:

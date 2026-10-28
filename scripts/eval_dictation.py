@@ -12,7 +12,7 @@ Setting up a test set (once):
      <stamp>.txt and fix it so it matches exactly what you SAID (words only -
      casing/punctuation don't count). Delete clips you don't want to keep.
   3. Optional: add <stamp>.expected.txt with the ideal final text (the way
-     Wispr Flow would format it, e.g. as a numbered list). That scores the
+     a good formatter would format it, e.g. as a numbered list). That scores the
      formatting, not just the words.
 
 Usage (from the project root, with the app closed so the GPU is free):

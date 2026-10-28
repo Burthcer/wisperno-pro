@@ -1,5 +1,5 @@
 """
-Wispr Flow-style paragraph splitting verification for Wisperno.
+Paragraph splitting verification for Wisperno.
 
 Real SAPI-synthesized speech (same technique as tests/test_audio_chunking.py,
 whose synth helpers are reused directly) fed through the REAL Transcriber, to
