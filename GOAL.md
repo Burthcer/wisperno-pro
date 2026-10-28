@@ -1,6 +1,6 @@
 > Note: this is the original design goal. The models in use today are in [ADVANCED.md](ADVANCED.md) and [models/MODELS.md](models/MODELS.md).
 
-# GOAL.md - Wisperno: Offline Desktop Dictation Engine ("Wispr Flow Clone")
+# GOAL.md - Wisperno: Offline Desktop Dictation Engine
 
 ## 1. Project Mission
 Wisperno is a local, low-latency (<500ms post-release), 100% offline push-to-talk dictation engine and contextual text-transformation daemon for Windows 11 with NVIDIA GPU acceleration. It listens globally for a push-to-talk hotkey, captures audio in-memory, transcribes speech with state-of-the-art accuracy, applies contextual LLM transformations (polishing, formatting, prompt engineering), and injects the polished text directly into whichever desktop application currently holds focus.

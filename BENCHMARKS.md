@@ -113,7 +113,7 @@ dictations skip the LLM entirely.
 
 ## Smart formatting (measured 2026-09-25, RTX 4070 Laptop, Turbo)
 
-Wispr Flow-style formatting added to the deterministic formatter, so both
+Smart formatting added to the deterministic formatter, so both
 the instant path and the LLM path get it:
 
 - Lists spoken without cue words, announced by their intro ("I need to do
